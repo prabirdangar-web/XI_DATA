@@ -1,99 +1,20 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>XI Semester Attendance & Marks Portal</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script type="module" src="app.js"></script>
-</head>
-<body>
-<header class="topbar">
-  <div>
-    <h1>XI Semester Portal</h1>
-    <p>Taldangra Fulmati High School · Class XI · 2026</p>
-  </div>
-  <div class="status" id="fbStatus">Firebase: checking…</div>
-</header>
-
-<nav class="tabs">
-  <button class="tab active" data-tab="students">Students / Excel</button>
-  <button class="tab" data-tab="attendance">Subject-wise Attendance</button>
-  <button class="tab" data-tab="marks">Marks Entry</button>
-  <button class="tab" data-tab="rules">WBCHSE Rules</button>
-</nav>
-
-<main>
-<section id="students" class="panel active">
-  <div class="card">
-    <h2>Import Excel data</h2>
-    <p>Upload the XI workbook. The app reads <b>HS-26</b> and <b>XI-REG</b> and builds the student/subject lists.</p>
-    <input id="excelFile" type="file" accept=".xlsx,.xls,.xlsm">
-    <button id="importBtn" class="primary">Import Excel</button>
-    <span id="importMsg"></span>
-  </div>
-  <div class="card">
-    <div class="toolbar">
-      <h2>Students</h2>
-      <input id="studentSearch" placeholder="Search name / registration / subject">
-    </div>
-    <div class="tableWrap"><table id="studentTable"></table></div>
-  </div>
-</section>
-
-<section id="attendance" class="panel">
-  <div class="card">
-    <div class="grid3">
-      <label>Subject <select id="attSubject"></select></label>
-      <label>Date <input id="attDate" type="date"></label>
-      <label>Period / Class <input id="attPeriod" placeholder="e.g. 1st Period"></label>
-    </div>
-    <div class="toolbar">
-      <button id="loadAtt" class="primary">Generate Attendance Sheet</button>
-      <button id="markAllPresent">Mark All Present</button>
-      <button id="saveAtt">Save Attendance</button>
-      <button id="printAtt">Print</button>
-    </div>
-    <div id="attInfo"></div>
-    <div class="tableWrap"><table id="attTable"></table></div>
-  </div>
-</section>
-
-<section id="marks" class="panel">
-  <div class="card">
-    <div class="grid3">
-      <label>Semester
-        <select id="semester"><option value="sem1">Semester I</option><option value="sem1sup">Semester I Supplementary</option><option value="sem2">Semester II</option></select>
-      </label>
-      <label>Subject <select id="markSubject"></select></label>
-      <label>Search <input id="markSearch" placeholder="Name / registration"></label>
-    </div>
-    <div id="markScheme" class="scheme"></div>
-    <div class="toolbar">
-      <button id="loadMarks" class="primary">Load Marks</button>
-      <button id="saveMarks">Save Marks</button>
-      <button id="printMarks">Print</button>
-    </div>
-    <div class="tableWrap"><table id="marksTable"></table></div>
-  </div>
-</section>
-
-<section id="rules" class="panel">
-  <div class="card">
-    <h2>WBCHSE Class XI Semester Rules used by this app</h2>
-    <ul>
-      <li>Semester I and Semester II are the two semesters of Class XI.</li>
-      <li>Semester I is MCQ-based; Semester II uses conventional answer scripts.</li>
-      <li>Class XI Semester I, Semester II, Supplementary, Practical and Project marks are submitted at the end of Semester II.</li>
-      <li>Pass requirement is 30% in the required subjects, with theory and project/practical passed independently.</li>
-      <li>For the supplied 2026 school record: 40-mark theory → pass 12; 35-mark theory → pass 11; 20-mark project → pass 6; 30-mark practical → pass 9.</li>
-    </ul>
-    <p class="note">The mark maxima above are taken from the supplied XI-2026 marks-record PDF. The app does not overwrite a subject's scheme with a generic value.</p>
-  </div>
-</section>
-</main>
-
-<footer>Firebase Firestore · GitHub Pages compatible · No server required</footer>
-</body>
-</html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>XI Semester Command Center</title><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><style>
+:root{--b:#123a8c;--bg:#f3f6fb;--c:#fff;--line:#dce3ef;--mut:#64748b}*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial;background:var(--bg);color:#172033}.top{background:linear-gradient(135deg,#0b2458,#2563eb);color:white;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}.top h1{margin:0;font-size:25px}.top p{margin:5px 0 0;opacity:.85}.status{padding:8px 12px;background:#ffffff22;border-radius:20px;font-size:13px}.layout{display:flex;min-height:calc(100vh - 86px)}aside{width:235px;background:#0a1731;padding:15px}.nav{display:block;width:100%;padding:12px;margin:3px 0;border:0;border-radius:9px;background:none;color:#cbd5e1;text-align:left;cursor:pointer}.nav.active,.nav:hover{background:#1d4ed8;color:#fff}main{flex:1;padding:24px;max-width:1550px;margin:auto;width:100%}.view{display:none}.view.active{display:block}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card,.stat{background:var(--c);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px;box-shadow:0 8px 25px #0f172a0a}.stat small{color:var(--mut)}.num{font-size:30px;font-weight:700;margin-top:8px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.field label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px}.field input,.field select{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}button{padding:9px 13px;border:1px solid #cbd5e1;background:#fff;border-radius:8px;font-weight:600;cursor:pointer}.primary{background:#1d4ed8;color:#fff;border-color:#1d4ed8}.table{overflow:auto;border:1px solid var(--line);border-radius:9px}table{width:100%;border-collapse:collapse;min-width:700px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}th{background:#f8fafc}.pill{padding:4px 8px;border-radius:20px;font-size:12px;font-weight:700}.pass{background:#dcfce7;color:#166534}.fail{background:#fee2e2;color:#991b1b}.pending{background:#fef3c7;color:#92400e}.notice{padding:10px;background:#eff6ff;color:#1e40af;border-radius:8px;margin:10px 0}.muted{color:var(--mut)}input.mark{width:80px;padding:7px}.empty{text-align:center;padding:30px;color:var(--mut)}@media(max-width:900px){aside{width:65px}.nav span{display:none}.cards,.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.top{padding:14px}.layout{display:block}aside{width:100%;display:flex;overflow:auto}.nav{min-width:max-content}.nav span{display:inline}main{padding:12px}.cards,.grid{grid-template-columns:1fr}}@media print{aside,.top,.noprint{display:none!important}.view{display:none}.view.active{display:block}}
+</style></head><body>
+<header class="top"><div><h1>XI Semester Command Center</h1><p>Taldangra Fulmati High School · Class XI · 2026</p></div><div id="status" class="status">Firebase: checking…</div></header>
+<div class="layout"><aside><button class="nav active" data-v="dash">🏠 <span>Dashboard</span></button><button class="nav" data-v="students">👨‍🎓 <span>Students</span></button><button class="nav" data-v="attendance">📅 <span>Attendance</span></button><button class="nav" data-v="marks">📝 <span>Marks Entry</span></button><button class="nav" data-v="results">📊 <span>Results</span></button><button class="nav" data-v="rules">📚 <span>WBCHSE Rules</span></button></aside><main>
+<section id="dash" class="view active"><h2>Dashboard</h2><p class="muted">Class XI academic command centre</p><div class="cards"><div class="stat"><small>Total Students</small><div class="num" id="nStudents">0</div></div><div class="stat"><small>Subjects</small><div class="num" id="nSubjects">0</div></div><div class="stat"><small>Attendance Records</small><div class="num" id="nAtt">0</div></div><div class="stat"><small>Marks Records</small><div class="num" id="nMarks">0</div></div></div><div class="card"><h3>Quick Actions</h3><div class="toolbar"><button class="primary" onclick="go('students')">Import Students</button><button onclick="go('attendance')">Attendance</button><button onclick="go('marks')">Marks Entry</button><button onclick="go('results')">Result Analysis</button></div></div></section>
+<section id="students" class="view"><h2>Student Database</h2><div class="card noprint"><div class="grid"><div class="field"><label>Excel</label><input id="file" type="file" accept=".xlsx,.xls,.xlsm"></div><div class="field"><label>Search</label><input id="sq" placeholder="Name / registration / subject"></div></div><div class="toolbar"><button class="primary" onclick="importExcel()">Import Excel</button><button onclick="saveStudents()">Save to Firebase</button><button onclick="print()">Print</button><span id="msg" class="muted"></span></div></div><div class="card"><div class="table"><table id="studentsTable"></table></div></div></section>
+<section id="attendance" class="view"><h2>Subject-wise Attendance</h2><div class="card noprint"><div class="grid"><div class="field"><label>Subject</label><select id="asub"></select></div><div class="field"><label>Date</label><input id="adate" type="date"></div><div class="field"><label>Period</label><input id="aperiod" placeholder="1st Period"></div><div class="field"><label>Search</label><input id="aq" placeholder="Name / registration"></div></div><div class="toolbar"><button class="primary" onclick="attendance()">Generate</button><button onclick="allAtt('P')">All Present</button><button onclick="allAtt('A')">All Absent</button><button onclick="saveAtt()">Save</button><button onclick="print()">Print</button></div></div><div class="card"><div id="ainfo"></div><div class="table"><table id="attTable"></table></div></div></section>
+<section id="marks" class="view"><h2>Marks Entry</h2><div class="card noprint"><div class="grid"><div class="field"><label>Semester</label><select id="sem"><option value="sem1">Semester I</option><option value="sem1sup">Semester I Supplementary</option><option value="sem2">Semester II</option></select></div><div class="field"><label>Subject</label><select id="msub"></select></div><div class="field"><label>Search</label><input id="mq" placeholder="Name / registration"></div></div><div id="scheme" class="notice"></div><div class="toolbar"><button class="primary" onclick="marks()">Load Marks</button><button onclick="saveMarks()">Save Marks</button><button onclick="print()">Print</button></div></div><div class="card"><div class="table"><table id="marksTable"></table></div></div></section>
+<section id="results" class="view"><h2>Result Analysis</h2><div class="card"><div class="table"><table id="resultTable"></table></div></div></section>
+<section id="rules" class="view"><h2>WBCHSE Class XI Rules Used</h2><div class="card"><ul><li>Class XI has Semester I and Semester II.</li><li>Semester I is MCQ-based; Semester II uses conventional answer scripts.</li><li>Semester I, Semester II, Supplementary, Practical and Project marks are submitted at the end of Semester II.</li><li>The portal checks theory and project/practical independently.</li><li>Supplied 2026 school record: 40-mark theory → pass 12; 35-mark theory → pass 11; 20-mark project → pass 6; 30-mark practical → pass 9.</li></ul></div></section>
+</main></div>
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js';import{getAuth,signInAnonymously,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';import{getFirestore,collection,doc,setDoc,getDocs,serverTimestamp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
+const cfg={apiKey:'AIzaSyCiqQFsnbSi6eCgUI_W3NTybzIkRmCI_54',authDomain:'tfhs-portal.firebaseapp.com',projectId:'tfhs-portal',storageBucket:'tfhs-portal.firebasestorage.app',messagingSenderId:'316041012204',appId:'1:316041012204:web:04ee8b19374c60f63716c9'};const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app);let user=null,students=[],subjects=[],attRows=[],markRows=[];const schemes={BNGA:[40,12,'Project',20,6],ENGB:[40,12,'Project',20,6],SNSK:[40,12,'Project',20,6],MATH:[40,12,'Project',20,6],PHIL:[40,12,'Project',20,6],HIST:[40,12,'Project',20,6],SANT:[40,12,'Project',20,6],COMA:[35,11,'Practical',30,9],GEGR:[35,11,'Practical',30,9],BIOS:[35,11,'Practical',30,9],PHYS:[35,11,'Practical',30,9],CHEM:[35,11,'Practical',30,9],COMS:[35,11,'Practical',30,9]};const $=x=>document.getElementById(x);function go(id){document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');document.querySelector(`[data-v="${id}"]`).classList.add('active');if(id==='results')results()}document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>go(b.dataset.v));onAuthStateChanged(auth,u=>{user=u;$('status').textContent=u?'Firebase: connected':'Firebase: not connected'});signInAnonymously(auth).catch(()=>{});$('adate').value=new Date().toISOString().slice(0,10);
+function norm(x){return String(x??'').trim()}function uniq(a){return[...new Set(a.filter(Boolean))]}function fill(){['asub','msub'].forEach(id=>$(id).innerHTML=subjects.map(s=>`<option>${s}</option>`).join(''))}function renderStudents(){let q=norm($('sq').value).toLowerCase();let r=students.filter(s=>`${s.name} ${s.registration} ${s.subjects}`.toLowerCase().includes(q));$('studentsTable').innerHTML='<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Gender</th><th>Subjects</th></tr></thead><tbody>'+r.map((s,i)=>`<tr><td>${i+1}</td><td>${s.registration}</td><td>${s.name}</td><td>${s.gender}</td><td>${s.subjects.join(', ')}</td></tr>`).join('')+'</tbody>'} $('sq').oninput=renderStudents;
+window.importExcel=async()=>{let f=$('file').files[0];if(!f)return alert('Choose Excel file.');let wb=XLSX.read(await f.arrayBuffer(),{type:'array'}),all=[];['HS-26','XI-REG'].forEach(n=>{if(wb.Sheets[n])all.push(...XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''}))});if(!all.length)all=[].concat(...wb.SheetNames.map(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''})));let out=[],seen=new Set();all.forEach(r=>{let txt=r.map(norm);let ri=txt.findIndex(x=>/registration|regn|roll/i.test(x));let ni=txt.findIndex(x=>/student.*name|^name$/i.test(x));if(ri<0||ni<0)return;let reg=norm(r[ri]),name=norm(r[ni]);if(!reg&&!name)return;let g=r.find((x,i)=>i!==ri&&i!==ni&&/^(male|female|m|f)$/i.test(norm(x)))||'';let subs=uniq(r.filter((x,i)=>i!==ri&&i!==ni&&/^[A-Za-z]{3,5}$/.test(norm(x))));let k=reg||name;if(!seen.has(k)){seen.add(k);out.push({registration:reg,name,gender:norm(g),subjects:subs})}});students=out;subjects=uniq(students.flatMap(s=>s.subjects));fill();renderStudents();$('msg').textContent=`Imported ${students.length} students / ${subjects.length} subjects`;dash();};window.saveStudents=async()=>{if(!user)return alert('Firebase sign-in not ready.');await setDoc(doc(db,'students','xi2026'),{students,subjects,updatedAt:serverTimestamp()});alert('Student database saved.');};
+window.attendance=()=>{let sub=$('asub').value,q=$('aq').value.toLowerCase();attRows=students.filter(s=>(!sub||s.subjects.includes(sub))&&`${s.name} ${s.registration}`.toLowerCase().includes(q)).map(s=>({registration:s.registration,name:s.name,status:'P'}));$('ainfo').innerHTML=`<div class="notice"><b>${sub}</b> · ${$('adate').value} · ${attRows.length} students</div>`;$('attTable').innerHTML='<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Attendance</th></tr></thead><tbody>'+attRows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.registration}</td><td>${r.name}</td><td><select onchange="attRows[${i}].status=this.value"><option value="P">Present</option><option value="A">Absent</option></select></td></tr>`).join('')+'</tbody>'};window.allAtt=v=>{attRows.forEach(r=>r.status=v);attendance()};window.saveAtt=async()=>{if(!user||!attRows.length)return alert('Generate attendance first.');let id=(`${$('asub').value}_${$('adate').value}_${$('aperiod').value}`).replace(/[^A-Za-z0-9_-]/g,'_');await setDoc(doc(db,'xiAttendance',id),{subject:$('asub').value,date:$('adate').value,period:$('aperiod').value,rows:attRows,updatedAt:serverTimestamp()});alert('Attendance saved.');};
+function updateScheme(){let s=schemes[$('msub').value];$('scheme').textContent=s?`Theory ${s[0]} (Pass ${s[1]}) · ${s[2]} ${s[3]} (Pass ${s[4]})`:'No configured scheme for this subject.'} $('msub').onchange=updateScheme;window.marks=()=>{let sub=$('msub').value,s=schemes[sub],q=$('mq').value.toLowerCase();markRows=students.filter(x=>(!sub||x.subjects.includes(sub))&&`${x.name} ${x.registration}`.toLowerCase().includes(q)).map(x=>({...x,theory:'',component:''}));$('marksTable').innerHTML=`<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Theory / ${s?.[0]||'—'}</th><th>${s?.[2]||'Project/Practical'} / ${s?.[3]||'—'}</th><th>Result</th></tr></thead><tbody>`+markRows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.registration}</td><td>${r.name}</td><td><input class="mark" type="number" max="${s?.[0]||100}" onchange="markRows[${i}].theory=this.value;markResult(${i})"></td><td><input class="mark" type="number" max="${s?.[3]||100}" onchange="markRows[${i}].component=this.value;markResult(${i})"></td><td id="res${i}"><span class="pill pending">Pending</span></td></tr>`).join('')+'</tbody>'};window.markResult=i=>{let s=schemes[$('msub').value],r=markRows[i],ok=s&&+r.theory>=s[1]&&+r.component>=s[4];$('res'+i).innerHTML=`<span class="pill ${ok?'pass':'fail'}">${ok?'PASS':'FAIL'}</span>`};window.saveMarks=async()=>{if(!user||!markRows.length)return alert('Load marks first.');let id=`${$('sem').value}_${$('msub').value}`;await setDoc(doc(db,'xiMarks',id),{semester:$('sem').value,subject:$('msub').value,rows:markRows,scheme:schemes[$('msub').value]||null,updatedAt:serverTimestamp()});alert('Marks saved.');};window.results=()=>{$('resultTable').innerHTML='<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Subjects</th><th>Status</th></tr></thead><tbody>'+students.map((s,i)=>`<tr><td>${i+1}</td><td>${s.registration}</td><td>${s.name}</td><td>${s.subjects.join(', ')}</td><td><span class="pill pending">Enter marks</span></td></tr>`).join('')+'</tbody>'};async function dash(){ $('nStudents').textContent=students.length;$('nSubjects').textContent=subjects.length;try{$('nAtt').textContent=(await getDocs(collection(db,'xiAttendance'))).size;$('nMarks').textContent=(await getDocs(collection(db,'xiMarks'))).size}catch(e){$('nAtt').textContent='—';$('nMarks').textContent='—'}}dash();renderStudents();fill();updateScheme();
+</script></body></html>
