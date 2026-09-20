@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>XI Semester Attendance & Marks Portal</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <h1>XI Semester Portal</h1>
+    <p>Taldangra Fulmati High School · Class XI · 2026</p>
+  </div>
+  <div class="status" id="fbStatus">Firebase: checking…</div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="students">Students / Excel</button>
+  <button class="tab" data-tab="attendance">Subject-wise Attendance</button>
+  <button class="tab" data-tab="marks">Marks Entry</button>
+  <button class="tab" data-tab="rules">WBCHSE Rules</button>
+</nav>
+
+<main>
+<section id="students" class="panel active">
+  <div class="card">
+    <h2>Import Excel data</h2>
+    <p>Upload the XI workbook. The app reads <b>HS-26</b> and <b>XI-REG</b> and builds the student/subject lists.</p>
+    <input id="excelFile" type="file" accept=".xlsx,.xls,.xlsm">
+    <button id="importBtn" class="primary">Import Excel</button>
+    <span id="importMsg"></span>
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      <h2>Students</h2>
+      <input id="studentSearch" placeholder="Search name / registration / subject">
+    </div>
+    <div class="tableWrap"><table id="studentTable"></table></div>
+  </div>
+</section>
+
+<section id="attendance" class="panel">
+  <div class="card">
+    <div class="grid3">
+      <label>Subject <select id="attSubject"></select></label>
+      <label>Date <input id="attDate" type="date"></label>
+      <label>Period / Class <input id="attPeriod" placeholder="e.g. 1st Period"></label>
+    </div>
+    <div class="toolbar">
+      <button id="loadAtt" class="primary">Generate Attendance Sheet</button>
+      <button id="markAllPresent">Mark All Present</button>
+      <button id="saveAtt">Save Attendance</button>
+      <button id="printAtt">Print</button>
+    </div>
+    <div id="attInfo"></div>
+    <div class="tableWrap"><table id="attTable"></table></div>
+  </div>
+</section>
+
+<section id="marks" class="panel">
+  <div class="card">
+    <div class="grid3">
+      <label>Semester
+        <select id="semester"><option value="sem1">Semester I</option><option value="sem1sup">Semester I Supplementary</option><option value="sem2">Semester II</option></select>
+      </label>
+      <label>Subject <select id="markSubject"></select></label>
+      <label>Search <input id="markSearch" placeholder="Name / registration"></label>
+    </div>
+    <div id="markScheme" class="scheme"></div>
+    <div class="toolbar">
+      <button id="loadMarks" class="primary">Load Marks</button>
+      <button id="saveMarks">Save Marks</button>
+      <button id="printMarks">Print</button>
+    </div>
+    <div class="tableWrap"><table id="marksTable"></table></div>
+  </div>
+</section>
+
+<section id="rules" class="panel">
+  <div class="card">
+    <h2>WBCHSE Class XI Semester Rules used by this app</h2>
+    <ul>
+      <li>Semester I and Semester II are the two semesters of Class XI.</li>
+      <li>Semester I is MCQ-based; Semester II uses conventional answer scripts.</li>
+      <li>Class XI Semester I, Semester II, Supplementary, Practical and Project marks are submitted at the end of Semester II.</li>
+      <li>Pass requirement is 30% in the required subjects, with theory and project/practical passed independently.</li>
+      <li>For the supplied 2026 school record: 40-mark theory → pass 12; 35-mark theory → pass 11; 20-mark project → pass 6; 30-mark practical → pass 9.</li>
+    </ul>
+    <p class="note">The mark maxima above are taken from the supplied XI-2026 marks-record PDF. The app does not overwrite a subject's scheme with a generic value.</p>
+  </div>
+</section>
+</main>
+
+<footer>Firebase Firestore · GitHub Pages compatible · No server required</footer>
+</body>
+</html>
