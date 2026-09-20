@@ -205,6 +205,7 @@ tr:hover td{background:#f8fafc}
     <button onclick="showView('students',this)">👨‍🎓 Students / Excel</button>
     <button onclick="showView('attendance',this)">📅 Attendance</button>
     <button onclick="showView('marks',this)">📝 Marks Entry</button>
+    <button onclick="showView('combined',this)">🧮 Combined Result (FM-100)</button>
     <button onclick="showView('analysis',this)">📊 Result Analysis</button>
     <button onclick="showView('rules',this)">📚 WBCHSE Rules</button>
   </div>
@@ -294,6 +295,11 @@ tr:hover td{background:#f8fafc}
   </div>
 
   <div class="panel">
+    <h3>Subject-wise Student Count</h3>
+    <div id="subjectCountBox">Import students to see subject-wise counts.</div>
+  </div>
+
+  <div class="panel">
     <div class="toolbar">
       <div class="field" style="flex:1">
         <label>Search</label>
@@ -312,8 +318,8 @@ tr:hover td{background:#f8fafc}
 
 <!-- ATTENDANCE -->
 <section id="attendance" class="view">
-  <div class="title">Subject-wise Examination Attendance</div>
-  <div class="subtitle">XI-REG • Exam date-wise • Subject-wise • Sex-wise • Registration No./Name-wise</div>
+  <div class="title">Subject-wise Attendance</div>
+  <div class="subtitle">Date-wise exam attendance — filter by subject, sex and registration number</div>
 
   <div class="panel">
     <div class="toolbar">
@@ -326,16 +332,21 @@ tr:hover td{background:#f8fafc}
 
       <div class="field">
         <label>Exam Date</label>
-        <input type="date" id="attDate" readonly>
+        <input type="text" id="attDate" placeholder="DD-MM-YYYY" readonly>
       </div>
 
       <div class="field">
         <label>Sex</label>
         <select id="attSex" onchange="renderAttendance()">
           <option value="ALL">All</option>
-          <option value="MALE">Male</option>
-          <option value="FEMALE">Female</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
         </select>
+      </div>
+
+      <div class="field" style="min-width:220px">
+        <label>Registration No. / Name</label>
+        <input id="attendanceSearch" placeholder="Registration No. / Name" oninput="renderAttendance()">
       </div>
 
       <button class="btn" onclick="generateAttendance()">Generate All</button>
@@ -347,17 +358,6 @@ tr:hover td{background:#f8fafc}
   </div>
 
   <div class="panel">
-    <div class="toolbar">
-      <div class="field" style="flex:1">
-        <label>Registration No. / Student Name</label>
-        <input id="attendanceSearch" placeholder="Search Registration No. or Name" oninput="renderAttendance()">
-      </div>
-      <div class="field">
-        <label>Eligible Students</label>
-        <input id="attCount" value="0" readonly style="width:120px;min-width:120px">
-      </div>
-    </div>
-
     <div class="tablewrap">
       <table>
         <thead>
@@ -419,12 +419,67 @@ tr:hover td{background:#f8fafc}
             <th>Roll</th>
             <th>Name</th>
             <th>Theory</th>
-            <th>Practical / Project</th>
+            <th id="compHeader">Practical / Project</th>
             <th>Total</th>
             <th>Result</th>
           </tr>
         </thead>
         <tbody id="marksBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- COMBINED RESULT -->
+<section id="combined" class="view">
+  <div class="title">Combined Result — Full Marks 100</div>
+  <div class="subtitle">Subject-wise, Sex-wise, Registration No-wise — Semester I Theory + Semester II Theory + Project/Practical</div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field">
+        <label>Subject</label>
+        <select id="combSubject" onchange="generateCombined()"></select>
+      </div>
+
+      <div class="field">
+        <label>Sex</label>
+        <select id="combSex" onchange="renderCombined()">
+          <option value="ALL">All</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:220px">
+        <label>Registration No. / Name</label>
+        <input id="combSearch" placeholder="Registration No. / Name" oninput="renderCombined()">
+      </div>
+
+      <button class="btn" onclick="generateCombined()">Generate</button>
+      <button class="btn secondary" onclick="printCombined()">Print</button>
+    </div>
+
+    <div id="combSchemeBox" class="scheme">Select a subject and click Generate.</div>
+  </div>
+
+  <div class="panel">
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SL</th>
+            <th>Registration No.</th>
+            <th>Name</th>
+            <th>Sex</th>
+            <th>Sem I Theory</th>
+            <th>Sem II Theory</th>
+            <th>Practical / Project</th>
+            <th>Total</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="combinedBody"><tr><td colspan="9">Select a subject and click Generate.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -513,6 +568,7 @@ const auth = firebase.auth();
 let students = [];
 let attendanceRows = [];
 let marksRows = [];
+let combinedRows = [];
 let importedHeaders = [];
 
 /* SUBJECT SCHEMES */
@@ -534,6 +590,14 @@ const SCHEMES = {
 };
 
 const SUBJECTS = Object.keys(SCHEMES);
+
+const EXAM_SCHEDULE = {
+  BNGA:"21-09-2026", ENGB:"24-09-2026", HIST:"30-09-2026", PHIL:"03-10-2026",
+  SNSK:"05-10-2026", GEGR:"01-10-2026", COMA:"29-09-2026", BIOS:"07-10-2026",
+  CHEM:"01-10-2026", PHYS:"28-09-2026", MATH:"05-10-2026", COMS:"29-09-2026",
+  SANT:"21-09-2026", POLS:"07-10-2026"
+};
+const ATTENDANCE_SUBJECTS = Object.keys(EXAM_SCHEDULE);
 
 /* AUTH */
 auth.signInAnonymously()
@@ -564,96 +628,67 @@ function showView(id,btn){
 }
 
 /* SUBJECT SELECTS */
-const EXAM_DATES = {
-  BNGA:"2026-09-21",
-  ENGB:"2026-09-24",
-  PHYS:"2026-09-28",
-  COMA:"2026-09-29",
-  COMS:"2026-09-29",
-  HIST:"2026-09-30",
-  GEGR:"2026-10-01",
-  CHEM:"2026-10-01",
-  PHIL:"2026-10-03",
-  SNSK:"2026-10-05",
-  MATH:"2026-10-05",
-  BIOS:"2026-10-07",
-  POLS:"2026-10-07",
-  SANT:"2026-09-21"
-};
-
-function normalizeSubject(v){
-  return String(v??"").trim().toUpperCase().replace(/\s+/g,"");
-}
-
-function getXIRegSubjectColumns(student){
-  return Object.keys(student||{})
-    .filter(k=>/^S[- ]?[1-6]$/i.test(String(k).trim()))
-    .map(k=>normalizeSubject(student[k]))
-    .filter(Boolean);
-}
-
-function studentHasSubject(student, subject){
-  const wanted=normalizeSubject(subject);
-  return getXIRegSubjectColumns(student).some(v=>{
-    return v===wanted || v.split(/[,;\/]/).map(normalizeSubject).includes(wanted);
-  });
-}
-
-function getStudentSex(student){
-  return String(findStudentValue(student,["Gender","gender","GENDER","Sex","sex"])||"").trim();
-}
-function getStudentReg(student){
-  return findStudentValue(student,["Registration No.","Registration No","Registration","REGISTRATION","Reg No.","Reg No"]);
-}
-function getStudentName(student){
-  return findStudentValue(student,["Name","name","NAME","Student Name"]);
-}
-function formatDateDMY(iso){
-  if(!iso) return "";
-  const p=iso.split("-");
-  return p.length===3 ? `${p[2]}-${p[1]}-${p[0]}` : iso;
-}
-
 function populateSubjects(){
   const a=document.getElementById("attSubject");
   const m=document.getElementById("marksSubject");
+  const c=document.getElementById("combSubject");
 
   a.innerHTML='<option value="">Select Subject</option>';
-  Object.keys(EXAM_DATES).forEach(s=>{
-    a.innerHTML+=`<option value="${s}">${s}</option>`;
+  m.innerHTML="";
+  c.innerHTML='<option value="">Select Subject</option>';
+
+  ATTENDANCE_SUBJECTS.forEach(s=>{
+    a.innerHTML+=`<option value="${s}">${s} — ${EXAM_SCHEDULE[s]}</option>`;
   });
 
-  m.innerHTML="";
   SUBJECTS.forEach(s=>{
     m.innerHTML+=`<option value="${s}">${s}</option>`;
+    c.innerHTML+=`<option value="${s}">${s}</option>`;
   });
+
   updateScheme();
+  setExamDateFromSubject();
+}
+
+function setExamDateFromSubject(){
+  const subject=document.getElementById("attSubject").value;
+  document.getElementById("attDate").value=EXAM_SCHEDULE[subject]||"";
 }
 
 populateSubjects();
 
 document.getElementById("marksSubject").addEventListener("change",updateScheme);
 
-document.getElementById("attDate").value="";
-
-function setExamDateFromSubject(){
-  const subject=document.getElementById("attSubject").value;
-  document.getElementById("attDate").value=EXAM_DATES[subject]||"";
+function isSemI(){
+  const exam=document.getElementById("marksExam").value;
+  return exam==="SEM1"||exam==="SUPP";
 }
 
 function updateScheme(){
   const s=document.getElementById("marksSubject").value;
   const x=SCHEMES[s];
+  const compHeader=document.getElementById("compHeader");
 
   if(!x){
     document.getElementById("schemeBox").textContent="Select a subject.";
     return;
   }
 
-  let component=x.practical ? "Practical" : "Project";
+  const componentLabel=x.practical ? "Practical" : "Project";
+  const componentMax=x.practical||x.project;
+  const fm=x.theory*2+componentMax;
 
-  document.getElementById("schemeBox").innerHTML=
-    `<b>${s}</b> — Theory: ${x.theory} marks, ${component}: ${x.practical||x.project} marks`;
+  if(isSemI()){
+    compHeader.textContent="Practical / Project (N/A — Sem I)";
+    document.getElementById("schemeBox").innerHTML=
+      `<b>${s}</b> — Semester I: Theory only, ${x.theory} marks. `+
+      `(${componentLabel} ${componentMax} marks and Semester II Theory ${x.theory} marks are recorded separately; Full Marks ${fm}.)`;
+  }else{
+    compHeader.textContent="Practical / Project";
+    document.getElementById("schemeBox").innerHTML=
+      `<b>${s}</b> — Semester II: Theory ${x.theory} marks, ${componentLabel} ${componentMax} marks. `+
+      `(Combined with Semester I Theory ${x.theory} marks — Full Marks ${fm}.)`;
+  }
 }
 
 /* STUDENTS */
@@ -674,44 +709,46 @@ async function loadStudents(){
 
 function importExcel(){
   const file=document.getElementById("excelFile").files[0];
-  if(!file){ alert("Please select the Excel file."); return; }
+
+  if(!file){
+    alert("Please select an Excel file.");
+    return;
+  }
 
   const reader=new FileReader();
+
   reader.onload=function(e){
     try{
       const wb=XLSX.read(e.target.result,{type:"array"});
       const ws=wb.Sheets["XI-REG"];
-      if(!ws){
-        alert("XI-REG sheet not found in the Excel file.");
+
+    if(!ws){
+      alert("XI-REG sheet not found in the Excel file.");
+      return;
+    }
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:"", range:1});
+
+      if(!rows.length){
+        alert("Excel file contains no data.");
         return;
       }
 
-      // XI-REG: row 1 is the report title; row 2 contains the real headers;
-      // A:K contains the student registration data and S-1:S-6 subject choices.
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:"",range:1});
-      if(rows.length<2){ alert("XI-REG does not contain student data."); return; }
+      importedHeaders=Object.keys(rows[0]);
 
-      const headers=rows[0].slice(0,11).map(v=>String(v).trim());
-      const dataRows=rows.slice(1);
-      importedHeaders=headers;
-
-      students=dataRows
-        .map(row=>{
-          const obj={};
-          headers.forEach((h,i)=>{ if(h) obj[h]=row[i]??""; });
-          return obj;
-        })
-        .filter(r=>String(r["Registration No."]||"").trim()!=="" && String(r["Name"]||"").trim()!=="")
-        .map((r,i)=>({sl:i+1,...r}));
+      students=rows.map((r,i)=>({
+        sl:i+1,
+        ...r
+      }));
 
       renderStudents();
-      populateSubjects();
       updateDashboard();
+
       alert(students.length+" Class XI students imported from XI-REG.");
     }catch(err){
       alert("Excel import error: "+err.message);
     }
   };
+
   reader.readAsArrayBuffer(file);
 }
 
@@ -769,134 +806,169 @@ function printStudents(){
 }
 
 /* ATTENDANCE */
-function generateAttendance(){
-  if(!students.length){
-    alert("Please import/load XI-REG students first.");
-    return;
-  }
-
-  const subject=document.getElementById("attSubject").value;
-  if(!subject){
-    alert("Select the exam subject first.");
-    return;
-  }
-
-  setExamDateFromSubject();
-
-  // ONLY students having the selected subject in XI-REG S-1 to S-6 are eligible.
-  const eligible=students.filter(s=>studentHasSubject(s,subject));
-
-  attendanceRows=eligible.map((s,i)=>({
-    sl:i+1,
-    student:s,
-    status:"P"
-  }));
-
-  document.getElementById("attendanceSearch").value="";
-  document.getElementById("attSex").value="ALL";
-  document.getElementById("attCount").value=attendanceRows.length;
-
-  if(!attendanceRows.length){
-    alert(`No students in XI-REG have ${subject} in S-1 to S-6.`);
-  }
-
-  renderAttendance();
+function getStudentSex(student){
+  return String(findStudentValue(student,["gender","Gender","GENDER","sex","Sex","SEX"])||"").trim();
+}
+function getStudentReg(student){
+  return findStudentValue(student,["registration","Registration","REGISTRATION","Registration No","Registration No.","Reg No","Reg No."]);
+}
+function getStudentName(student){
+  return findStudentValue(student,["name","Name","NAME","Student Name"]);
+}
+function getStudentRoll(student){
+  const roll=findStudentValue(student,["roll","Roll","ROLL","Roll No","RollNo"]);
+  if(roll) return roll;
+  return findStudentValue(student,["sl","Sl","Sl.","SL","SL.","Serial"])||getStudentReg(student);
 }
 
+/* SUBJECT ENROLLMENT
+   Real XI-REG format: slot columns S-1..S-6, each holding the SUBJECT CODE the student
+   takes in that slot (e.g. S-1=BNGA, S-4=CHEM, S-6=COMA). A student "takes" a subject if
+   that code appears in any of their slot columns.
+   Fallback (older/other sheets): one column per subject with Yes/blank. */
+const SUBJECT_ALIASES={
+  BNGA:["bnga","bengali","beng","bng"],
+  ENGB:["engb","english","eng"],
+  SNSK:["snsk","sanskrit","sansk"],
+  MATH:["math","maths","mathematics"],
+  PHIL:["phil","philosophy"],
+  HIST:["hist","history"],
+  SANT:["sant","santali"],
+  COMA:["coma","commerce(a)","commercea"],
+  GEGR:["gegr","geography","geo"],
+  BIOS:["bios","biology","bio","biologicalscience"],
+  PHYS:["phys","physics"],
+  CHEM:["chem","chemistry"],
+  COMS:["coms","computerscience","computer","compsc"],
+  POLS:["pols","politicalscience","political","polsc"]
+};
+function normalizeHeader(h){
+  return String(h||"").toLowerCase().trim().replace(/[^a-z0-9]/g,"");
+}
+function normalizeCode(v){
+  return String(v||"").toUpperCase().trim();
+}
+// Slot columns are headers like "S-1", "S 2", "S_3", "S6" etc.
+function getSlotKeys(student){
+  return Object.keys(student).filter(k=>/^s\d+$/i.test(normalizeHeader(k)));
+}
+function findSubjectColumnKey(student,subjectCode){
+  const keys=Object.keys(student);
+  const target=normalizeHeader(subjectCode);
+  const aliases=(SUBJECT_ALIASES[subjectCode]||[subjectCode.toLowerCase()]).map(normalizeHeader);
+  let key=keys.find(k=>normalizeHeader(k)===target);
+  if(!key) key=keys.find(k=>aliases.includes(normalizeHeader(k)));
+  return key||null;
+}
+function getSubjectFlag(student,subjectCode){
+  const slotKeys=getSlotKeys(student);
+  if(slotKeys.length){
+    // Slot-based sheet: this subject is taken iff its code appears in one of the slots.
+    return slotKeys.some(k=>normalizeCode(student[k])===normalizeCode(subjectCode));
+  }
+  // Fallback: one column per subject with Yes/blank.
+  const key=findSubjectColumnKey(student,subjectCode);
+  if(!key) return undefined; // no way at all to tell for this student
+  const val=String(student[key]||"").trim().toUpperCase();
+  if(val===""||["N","NO","0","-","NIL","X","ABSENT"].includes(val)) return false;
+  return true;
+}
+// Can we determine subject enrollment at all from the imported data (slots OR a matching column)?
+function subjectColumnExistsInData(subjectCode){
+  return students.some(s=>getSlotKeys(s).length>0 || findSubjectColumnKey(s,subjectCode)!==null);
+}
+function studentTakesSubject(student,subjectCode){
+  const flag=getSubjectFlag(student,subjectCode);
+  return flag===undefined ? false : flag;
+}
+function subjectWiseCounts(subjectList){
+  const counts={};
+  subjectList.forEach(code=>{
+    counts[code]=subjectColumnExistsInData(code)
+      ? students.filter(s=>studentTakesSubject(s,code)).length
+      : null; // null = no way to determine this subject's enrollment from the imported data
+  });
+  return counts;
+}
+function renderSubjectCounts(){
+  const box=document.getElementById("subjectCountBox");
+  if(!box) return;
+  if(!students.length){ box.innerHTML="Import students to see subject-wise counts."; return; }
+  const allCodes=Array.from(new Set([...SUBJECTS,...ATTENDANCE_SUBJECTS]));
+  const counts=subjectWiseCounts(allCodes);
+  box.innerHTML=allCodes.map(code=>{
+    const c=counts[code];
+    return c===null
+      ? `<span class="badge" style="background:#fee2e2;color:#991b1b;margin:3px">${code}: not found</span>`
+      : `<span class="badge" style="background:#e2e8f0;color:#172033;margin:3px">${code}: <b>${c}</b></span>`;
+  }).join(" ")+
+  `<p style="font-size:12px;color:#64748b;margin-top:10px">Columns imported: ${escapeHtml((importedHeaders||[]).join(", ")||"—")}</p>`;
+}
+// Returns true if OK to proceed, false (with an alert already shown) if we can't tell who takes this subject
+function checkSubjectColumn(subject){
+  if(subjectColumnExistsInData(subject)) return true;
+  alert(
+    `Could not determine which students take "${subject}" from the imported XI-REG data.\n\n`+
+    `Columns found: ${(importedHeaders||[]).join(", ")||"(none — please re-import the Excel)"}\n\n`+
+    `Expected either S-1..S-6 subject-slot columns, or a dedicated ${subject} column. Please check your sheet.`
+  );
+  return false;
+}
+function generateAttendance(){
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  const subject=document.getElementById("attSubject").value;
+  if(!subject){ alert("Select the exam subject first."); return; }
+  if(!checkSubjectColumn(subject)) return;
+  setExamDateFromSubject();
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
+  attendanceRows=eligible.map((s,i)=>({sl:i+1,student:s,status:"P"}));
+  renderAttendance();
+}
 function renderAttendance(){
   const body=document.getElementById("attendanceBody");
   const q=(document.getElementById("attendanceSearch").value||"").toLowerCase().trim();
   const sex=document.getElementById("attSex").value;
-
   const rows=attendanceRows.filter(r=>{
-    const gender=getStudentSex(r.student).toUpperCase();
+    const gender=getStudentSex(r.student).toLowerCase();
     const reg=String(getStudentReg(r.student)||"").toLowerCase();
     const name=String(getStudentName(r.student)||"").toLowerCase();
-    const sexOK=sex==="ALL" || gender===sex;
-    const searchOK=!q || reg.includes(q) || name.includes(q);
-    return sexOK && searchOK;
+    return (sex==="ALL" || gender===sex.toLowerCase()) && (!q || reg.includes(q) || name.includes(q));
   });
-
   body.innerHTML=rows.length ? rows.map(r=>{
     const idx=attendanceRows.indexOf(r);
-    return `<tr>
-      <td>${r.sl}</td>
-      <td>${escapeHtml(getStudentReg(r.student))}</td>
-      <td>${escapeHtml(getStudentName(r.student))}</td>
-      <td>${escapeHtml(getStudentSex(r.student))}</td>
-      <td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td>
-      <td><div class="attendance-buttons">
-        <button class="pbtn" onclick="setAttendance(${idx},'P')">P</button>
-        <button class="abtn" onclick="setAttendance(${idx},'A')">A</button>
-      </div></td>
-    </tr>`;
-  }).join("") : "<tr><td colspan='6'>No students match the selected subject/filter.</td></tr>";
-
-  document.getElementById("attCount").value=rows.length;
+    return `<tr><td>${r.sl}</td><td>${escapeHtml(getStudentReg(r.student))}</td><td>${escapeHtml(getStudentName(r.student))}</td><td>${escapeHtml(getStudentSex(r.student))}</td><td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td><td><div class="attendance-buttons"><button class="pbtn" onclick="setAttendance(${idx},'P')">P</button><button class="abtn" onclick="setAttendance(${idx},'A')">A</button></div></td></tr>`;
+  }).join("") : "<tr><td colspan='6'>No students match the selected filter.</td></tr>";
 }
-
-function setAttendance(i,status){
-  if(attendanceRows[i]) attendanceRows[i].status=status;
-  renderAttendance();
-}
-
-function markAllAttendance(status){
-  attendanceRows.forEach(r=>r.status=status);
-  renderAttendance();
-}
-
+function setAttendance(i,status){ attendanceRows[i].status=status; renderAttendance(); }
+function markAllAttendance(status){ attendanceRows.forEach(r=>r.status=status); renderAttendance(); }
 async function saveAttendance(){
   const subject=document.getElementById("attSubject").value;
   const date=document.getElementById("attDate").value;
-
-  if(!subject||!date){
-    alert("Select the exam subject.");
-    return;
-  }
-  if(!attendanceRows.length){
-    alert("Generate the attendance sheet first.");
-    return;
-  }
-
+  if(!subject||!date){ alert("Select the exam subject."); return; }
+  if(!attendanceRows.length){ alert("Generate the attendance sheet first."); return; }
   const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
   try{
-    await db.collection("xiAttendance").doc(id).set({
-      examType:"XI-2026 Annual Examination",
-      subject,
-      date,
-      dateDisplay:formatDateDMY(date),
-      eligibleStudents:attendanceRows.length,
-      rows:attendanceRows.map(r=>({
-        registrationNo:getStudentReg(r.student),
-        name:getStudentName(r.student),
-        gender:getStudentSex(r.student),
-        student:r.student,
-        status:r.status
-      })),
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-    });
-    alert(`Attendance saved: ${subject} — ${formatDateDMY(date)} (${attendanceRows.length} students)`);
-    updateDashboard();
-  }catch(e){
-    alert("Attendance save failed: "+e.message);
-  }
+    await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    alert(`Attendance saved: ${subject} — ${date}`); updateDashboard();
+  }catch(e){ alert("Attendance save failed: "+e.message); }
 }
-
 function printAttendance(){
-  const subject=document.getElementById("attSubject").value;
-  const date=document.getElementById("attDate").value;
-  if(!subject||!date){
-    alert("Select the exam subject first.");
-    return;
-  }
-  printElement("attendanceBody",`ATTENDANCE RECORD – XI-2026 ANNUAL EXAMINATION | ${subject} | ${formatDateDMY(date)}`);
+  const subject=document.getElementById("attSubject").value, date=document.getElementById("attDate").value;
+  if(!subject||!date){ alert("Select the exam subject first."); return; }
+  printElement("attendanceBody",`ATTENDANCE RECORD – XI-2026 ANNUAL EXAMINATION | ${subject} | ${date}`);
 }
 
 /* MARKS */
 function loadMarks(){
   const subject=document.getElementById("marksSubject").value;
+  if(!subject){ marksRows=[]; renderMarks(); updateScheme(); return; }
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  if(!checkSubjectColumn(subject)) return;
 
-  marksRows=students.map((s,i)=>({
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+
+  marksRows=eligible.map((s,i)=>({
     sl:i+1,
     student:s,
     theory:"",
@@ -915,25 +987,27 @@ function renderMarks(){
     Object.values(r.student).join(" ").toLowerCase().includes(q)
   );
 
+  const semI=isSemI();
+
   body.innerHTML=rows.map(r=>{
     const idx=marksRows.indexOf(r);
     const scheme=SCHEMES[document.getElementById("marksSubject").value];
+    const compMax=scheme.practical||scheme.project;
 
     const theory=Number(r.theory)||0;
-    const component=Number(r.component)||0;
+    const component=semI ? 0 : (Number(r.component)||0);
     const total=theory+component;
 
     const theoryPass=theory >= Math.ceil(scheme.theory*0.30);
-    const compMax=scheme.practical||scheme.project;
     const compPass=component >= Math.ceil(compMax*0.30);
-    const result=(r.theory!==""&&r.component!=="")
-      ? (theoryPass&&compPass ? "PASS":"FAIL")
-      : "";
+    const result=semI
+      ? (r.theory!=="" ? (theoryPass ? "PASS":"FAIL") : "")
+      : ((r.theory!==""&&r.component!=="") ? (theoryPass&&compPass ? "PASS":"FAIL") : "");
 
     return `
       <tr>
         <td>${r.sl}</td>
-        <td>${escapeHtml(findStudentValue(r.student,["roll","Roll","ROLL","Roll No","RollNo"]))}</td>
+        <td>${escapeHtml(getStudentRoll(r.student))}</td>
         <td>${escapeHtml(findStudentValue(r.student,["name","Name","NAME","Student Name"]))}</td>
         <td>
           <input class="markinput" type="number" min="0"
@@ -942,7 +1016,8 @@ function renderMarks(){
         </td>
         <td>
           <input class="markinput" type="number" min="0"
-            max="${compMax}" value="${r.component}"
+            max="${compMax}" value="${semI?'':r.component}"
+            ${semI?'disabled placeholder="N/A"':''}
             onchange="setMark(${idx},'component',this.value)">
         </td>
         <td>${total}</td>
@@ -998,10 +1073,116 @@ function printMarks(){
   printElement("marksBody","Marks Entry");
 }
 
+/* COMBINED RESULT (FM-100): Sem I Theory + Sem II Theory + Project/Practical */
+async function generateCombined(){
+  const subject=document.getElementById("combSubject").value;
+  if(!subject){ alert("Select a subject first."); return; }
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  if(!checkSubjectColumn(subject)) return;
+
+  const scheme=SCHEMES[subject];
+  if(!scheme){ alert("No marks scheme found for this subject."); return; }
+
+  const compLabel=scheme.practical ? "Practical" : "Project";
+  const compMax=scheme.practical||scheme.project;
+  const fm=scheme.theory*2+compMax;
+
+  document.getElementById("combSchemeBox").innerHTML=
+    `<b>${subject}</b> — Sem I Theory: ${scheme.theory}, Sem II Theory: ${scheme.theory}, ${compLabel}: ${compMax} — Full Marks: <b>${fm}</b>`;
+
+  let sem1Rows=[],sem2Rows=[];
+  try{
+    const [s1,s2]=await Promise.all([
+      db.collection("xiMarks").doc(`SEM1_${subject}`).get(),
+      db.collection("xiMarks").doc(`SEM2_${subject}`).get()
+    ]);
+    if(s1.exists) sem1Rows=s1.data().rows||[];
+    if(s2.exists) sem2Rows=s2.data().rows||[];
+  }catch(e){
+    alert("Could not load saved marks: "+e.message);
+    return;
+  }
+
+  const keyOf=(st)=>String(getStudentReg(st)||findStudentValue(st,["roll","Roll","ROLL","Roll No","RollNo"])||"").trim();
+
+  const sem1Map={}, sem2Map={};
+  sem1Rows.forEach(r=>{ sem1Map[keyOf(r.student)]=r; });
+  sem2Rows.forEach(r=>{ sem2Map[keyOf(r.student)]=r; });
+
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
+
+  combinedRows=eligible.map((s,i)=>{
+    const k=keyOf(s);
+    const r1=sem1Map[k], r2=sem2Map[k];
+    const sem1Theory=r1&&r1.theory!==""?Number(r1.theory)||0:null;
+    const sem2Theory=r2&&r2.theory!==""?Number(r2.theory)||0:null;
+    const comp=r2&&r2.component!==""?Number(r2.component)||0:null;
+    return {sl:i+1,student:s,sem1Theory,sem2Theory,comp};
+  });
+
+  renderCombined();
+}
+
+function renderCombined(){
+  const scheme=SCHEMES[document.getElementById("combSubject").value];
+  if(!scheme || !combinedRows.length){
+    document.getElementById("combinedBody").innerHTML=
+      "<tr><td colspan='9'>Select a subject and click Generate.</td></tr>";
+    return;
+  }
+
+  const sex=document.getElementById("combSex").value;
+  const q=(document.getElementById("combSearch").value||"").toLowerCase().trim();
+  const compMax=scheme.practical||scheme.project;
+
+  const rows=combinedRows.filter(r=>{
+    const gender=getStudentSex(r.student).toLowerCase();
+    const reg=String(getStudentReg(r.student)||"").toLowerCase();
+    const name=String(getStudentName(r.student)||"").toLowerCase();
+    return (sex==="ALL"||gender===sex.toLowerCase()) && (!q||reg.includes(q)||name.includes(q));
+  });
+
+  const body=document.getElementById("combinedBody");
+
+  body.innerHTML=rows.length ? rows.map(r=>{
+    const allEntered = r.sem1Theory!==null && r.sem2Theory!==null && r.comp!==null;
+    const total = (r.sem1Theory||0)+(r.sem2Theory||0)+(r.comp||0);
+
+    let result="";
+    if(allEntered){
+      const sem1Pass=r.sem1Theory >= Math.ceil(scheme.theory*0.30);
+      const sem2Pass=r.sem2Theory >= Math.ceil(scheme.theory*0.30);
+      const compPass=r.comp >= Math.ceil(compMax*0.30);
+      result = (sem1Pass&&sem2Pass&&compPass) ? "PASS":"FAIL";
+    }
+
+    return `<tr>
+      <td>${r.sl}</td>
+      <td>${escapeHtml(getStudentReg(r.student))}</td>
+      <td>${escapeHtml(getStudentName(r.student))}</td>
+      <td>${escapeHtml(getStudentSex(r.student))}</td>
+      <td>${r.sem1Theory===null?"—":r.sem1Theory}</td>
+      <td>${r.sem2Theory===null?"—":r.sem2Theory}</td>
+      <td>${r.comp===null?"—":r.comp}</td>
+      <td>${allEntered?total:"—"}</td>
+      <td class="result">${result?`<span class="badge ${result==="PASS"?"pass":"fail"}">${result}</span>`:""}</td>
+    </tr>`;
+  }).join("") : "<tr><td colspan='9'>No students match the selected filter.</td></tr>";
+}
+
+function printCombined(){
+  const subject=document.getElementById("combSubject").value;
+  if(!subject){ alert("Select a subject first."); return; }
+  if(!combinedRows.length){ alert("Generate the combined result first."); return; }
+  printElement("combinedBody",`COMBINED RESULT — FULL MARKS 100 | ${subject}`);
+}
+
 /* DASHBOARD */
 function updateDashboard(){
   document.getElementById("dashStudents").textContent=students.length;
   document.getElementById("dashSubjects").textContent=SUBJECTS.length;
+  renderSubjectCounts();
 }
 
 async function updateAnalysis(){
