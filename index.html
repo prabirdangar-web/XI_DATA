@@ -628,7 +628,7 @@ function importExcel(){
       alert("XI-REG sheet not found in the Excel file.");
       return;
     }
-      const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:"", range:1});
 
       if(!rows.length){
         alert("Excel file contains no data.");
