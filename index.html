@@ -622,7 +622,12 @@ function importExcel(){
   reader.onload=function(e){
     try{
       const wb=XLSX.read(e.target.result,{type:"array"});
-      const ws=wb.Sheets[wb.SheetNames[0]];
+      const ws=wb.Sheets["XI-REG"];
+
+    if(!ws){
+      alert("XI-REG sheet not found in the Excel file.");
+      return;
+    }
       const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
 
       if(!rows.length){
@@ -640,7 +645,7 @@ function importExcel(){
       renderStudents();
       updateDashboard();
 
-      alert(students.length+" students imported.");
+      alert(students.length+" Class XI students imported from XI-REG.");
     }catch(err){
       alert("Excel import error: "+err.message);
     }
