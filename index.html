@@ -827,7 +827,7 @@ function getStudentRoll(student){
    that code appears in any of their slot columns.
    Fallback (older/other sheets): one column per subject with Yes/blank. */
 const SUBJECT_ALIASES={
-  BNGA:["bnga","bengali","beng","bng"],
+  BNGA:["bnga","beng","bengali","bangla","bng"],
   ENGB:["engb","english","eng"],
   SNSK:["snsk","sanskrit","sansk"],
   MATH:["math","maths","mathematics"],
@@ -893,16 +893,49 @@ function subjectWiseCounts(subjectList){
 function renderSubjectCounts(){
   const box=document.getElementById("subjectCountBox");
   if(!box) return;
-  if(!students.length){ box.innerHTML="Import students to see subject-wise counts."; return; }
-  const allCodes=Array.from(new Set([...SUBJECTS,...ATTENDANCE_SUBJECTS]));
-  const counts=subjectWiseCounts(allCodes);
-  box.innerHTML=allCodes.map(code=>{
+  if(!students.length){
+    box.innerHTML="Import students to see subject-wise counts.";
+    return;
+  }
+
+  // Main DB subject count: count each student once for every subject
+  // appearing in S-1 ... S-6 (or the matching subject column fallback).
+  // Display exactly the 13 subjects used by the examination database.
+  const countSubjects=[
+    ["SANT","SANT"],
+    ["BNGA","BENG"],
+    ["ENGB","ENGB"],
+    ["SNSK","SNSK"],
+    ["MATH","MATH"],
+    ["PHIL","PHIL"],
+    ["HIST","HIST"],
+    ["COMA","COMA"],
+    ["GEGR","GEGR"],
+    ["BIOS","BIOS"],
+    ["PHYS","PHYS"],
+    ["CHEM","CHEM"],
+    ["COMS","COMS"]
+  ];
+
+  const counts=subjectWiseCounts(countSubjects.map(x=>x[0]));
+  const rows=countSubjects.map(([code,label])=>{
     const c=counts[code];
-    return c===null
-      ? `<span class="badge" style="background:#fee2e2;color:#991b1b;margin:3px">${code}: not found</span>`
-      : `<span class="badge" style="background:#e2e8f0;color:#172033;margin:3px">${code}: <b>${c}</b></span>`;
-  }).join(" ")+
-  `<p style="font-size:12px;color:#64748b;margin-top:10px">Columns imported: ${escapeHtml((importedHeaders||[]).join(", ")||"—")}</p>`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:11px 14px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc;
+      min-width:150px">
+      <span style="font-weight:800">${label}</span>
+      <span style="font-size:20px;font-weight:900;color:#2563eb">${c===null?"—":String(c).padStart(2,"0")}</span>
+    </div>`;
+  }).join("");
+
+  box.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px">${rows}</div>
+    <p style="font-size:12px;color:#64748b;margin-top:12px">
+      Count is calculated from the Main DB subject selections (S-1 to S-6). Each student is counted once per subject.
+    </p>
+    <p style="font-size:12px;color:#64748b;margin-top:4px">
+      Columns imported: ${escapeHtml((importedHeaders||[]).join(", ")||"—")}
+    </p>`;
 }
 // Returns true if OK to proceed, false (with an alert already shown) if we can't tell who takes this subject
 function checkSubjectColumn(subject){
