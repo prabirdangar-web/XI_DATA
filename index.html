@@ -205,6 +205,7 @@ tr:hover td{background:#f8fafc}
     <button onclick="showView('students',this)">👨‍🎓 Students / Excel</button>
     <button onclick="showView('attendance',this)">📅 Attendance</button>
     <button onclick="showView('marks',this)">📝 Marks Entry</button>
+    <button onclick="showView('combined',this)">🧮 Combined Result (FM-100)</button>
     <button onclick="showView('analysis',this)">📊 Result Analysis</button>
     <button onclick="showView('rules',this)">📚 WBCHSE Rules</button>
   </div>
@@ -413,12 +414,67 @@ tr:hover td{background:#f8fafc}
             <th>Roll</th>
             <th>Name</th>
             <th>Theory</th>
-            <th>Practical / Project</th>
+            <th id="compHeader">Practical / Project</th>
             <th>Total</th>
             <th>Result</th>
           </tr>
         </thead>
         <tbody id="marksBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- COMBINED RESULT -->
+<section id="combined" class="view">
+  <div class="title">Combined Result — Full Marks 100</div>
+  <div class="subtitle">Subject-wise, Sex-wise, Registration No-wise — Semester I Theory + Semester II Theory + Project/Practical</div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field">
+        <label>Subject</label>
+        <select id="combSubject" onchange="generateCombined()"></select>
+      </div>
+
+      <div class="field">
+        <label>Sex</label>
+        <select id="combSex" onchange="renderCombined()">
+          <option value="ALL">All</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:220px">
+        <label>Registration No. / Name</label>
+        <input id="combSearch" placeholder="Registration No. / Name" oninput="renderCombined()">
+      </div>
+
+      <button class="btn" onclick="generateCombined()">Generate</button>
+      <button class="btn secondary" onclick="printCombined()">Print</button>
+    </div>
+
+    <div id="combSchemeBox" class="scheme">Select a subject and click Generate.</div>
+  </div>
+
+  <div class="panel">
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SL</th>
+            <th>Registration No.</th>
+            <th>Name</th>
+            <th>Sex</th>
+            <th>Sem I Theory</th>
+            <th>Sem II Theory</th>
+            <th>Practical / Project</th>
+            <th>Total</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="combinedBody"><tr><td colspan="9">Select a subject and click Generate.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -507,6 +563,7 @@ const auth = firebase.auth();
 let students = [];
 let attendanceRows = [];
 let marksRows = [];
+let combinedRows = [];
 let importedHeaders = [];
 
 /* SUBJECT SCHEMES */
@@ -569,9 +626,11 @@ function showView(id,btn){
 function populateSubjects(){
   const a=document.getElementById("attSubject");
   const m=document.getElementById("marksSubject");
+  const c=document.getElementById("combSubject");
 
   a.innerHTML='<option value="">Select Subject</option>';
   m.innerHTML="";
+  c.innerHTML='<option value="">Select Subject</option>';
 
   ATTENDANCE_SUBJECTS.forEach(s=>{
     a.innerHTML+=`<option value="${s}">${s} — ${EXAM_SCHEDULE[s]}</option>`;
@@ -579,6 +638,7 @@ function populateSubjects(){
 
   SUBJECTS.forEach(s=>{
     m.innerHTML+=`<option value="${s}">${s}</option>`;
+    c.innerHTML+=`<option value="${s}">${s}</option>`;
   });
 
   updateScheme();
@@ -594,19 +654,36 @@ populateSubjects();
 
 document.getElementById("marksSubject").addEventListener("change",updateScheme);
 
+function isSemI(){
+  const exam=document.getElementById("marksExam").value;
+  return exam==="SEM1"||exam==="SUPP";
+}
+
 function updateScheme(){
   const s=document.getElementById("marksSubject").value;
   const x=SCHEMES[s];
+  const compHeader=document.getElementById("compHeader");
 
   if(!x){
     document.getElementById("schemeBox").textContent="Select a subject.";
     return;
   }
 
-  let component=x.practical ? "Practical" : "Project";
+  const componentLabel=x.practical ? "Practical" : "Project";
+  const componentMax=x.practical||x.project;
+  const fm=x.theory*2+componentMax;
 
-  document.getElementById("schemeBox").innerHTML=
-    `<b>${s}</b> — Theory: ${x.theory} marks, ${component}: ${x.practical||x.project} marks`;
+  if(isSemI()){
+    compHeader.textContent="Practical / Project (N/A — Sem I)";
+    document.getElementById("schemeBox").innerHTML=
+      `<b>${s}</b> — Semester I: Theory only, ${x.theory} marks. `+
+      `(${componentLabel} ${componentMax} marks and Semester II Theory ${x.theory} marks are recorded separately; Full Marks ${fm}.)`;
+  }else{
+    compHeader.textContent="Practical / Project";
+    document.getElementById("schemeBox").innerHTML=
+      `<b>${s}</b> — Semester II: Theory ${x.theory} marks, ${componentLabel} ${componentMax} marks. `+
+      `(Combined with Semester I Theory ${x.theory} marks — Full Marks ${fm}.)`;
+  }
 }
 
 /* STUDENTS */
@@ -798,20 +875,22 @@ function renderMarks(){
     Object.values(r.student).join(" ").toLowerCase().includes(q)
   );
 
+  const semI=isSemI();
+
   body.innerHTML=rows.map(r=>{
     const idx=marksRows.indexOf(r);
     const scheme=SCHEMES[document.getElementById("marksSubject").value];
+    const compMax=scheme.practical||scheme.project;
 
     const theory=Number(r.theory)||0;
-    const component=Number(r.component)||0;
+    const component=semI ? 0 : (Number(r.component)||0);
     const total=theory+component;
 
     const theoryPass=theory >= Math.ceil(scheme.theory*0.30);
-    const compMax=scheme.practical||scheme.project;
     const compPass=component >= Math.ceil(compMax*0.30);
-    const result=(r.theory!==""&&r.component!=="")
-      ? (theoryPass&&compPass ? "PASS":"FAIL")
-      : "";
+    const result=semI
+      ? (r.theory!=="" ? (theoryPass ? "PASS":"FAIL") : "")
+      : ((r.theory!==""&&r.component!=="") ? (theoryPass&&compPass ? "PASS":"FAIL") : "");
 
     return `
       <tr>
@@ -825,7 +904,8 @@ function renderMarks(){
         </td>
         <td>
           <input class="markinput" type="number" min="0"
-            max="${compMax}" value="${r.component}"
+            max="${compMax}" value="${semI?'':r.component}"
+            ${semI?'disabled placeholder="N/A"':''}
             onchange="setMark(${idx},'component',this.value)">
         </td>
         <td>${total}</td>
@@ -879,6 +959,107 @@ async function saveMarks(){
 
 function printMarks(){
   printElement("marksBody","Marks Entry");
+}
+
+/* COMBINED RESULT (FM-100): Sem I Theory + Sem II Theory + Project/Practical */
+async function generateCombined(){
+  const subject=document.getElementById("combSubject").value;
+  if(!subject){ alert("Select a subject first."); return; }
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+
+  const scheme=SCHEMES[subject];
+  if(!scheme){ alert("No marks scheme found for this subject."); return; }
+
+  const compLabel=scheme.practical ? "Practical" : "Project";
+  const compMax=scheme.practical||scheme.project;
+  const fm=scheme.theory*2+compMax;
+
+  document.getElementById("combSchemeBox").innerHTML=
+    `<b>${subject}</b> — Sem I Theory: ${scheme.theory}, Sem II Theory: ${scheme.theory}, ${compLabel}: ${compMax} — Full Marks: <b>${fm}</b>`;
+
+  let sem1Rows=[],sem2Rows=[];
+  try{
+    const [s1,s2]=await Promise.all([
+      db.collection("xiMarks").doc(`SEM1_${subject}`).get(),
+      db.collection("xiMarks").doc(`SEM2_${subject}`).get()
+    ]);
+    if(s1.exists) sem1Rows=s1.data().rows||[];
+    if(s2.exists) sem2Rows=s2.data().rows||[];
+  }catch(e){
+    alert("Could not load saved marks: "+e.message);
+    return;
+  }
+
+  const keyOf=(st)=>String(getStudentReg(st)||findStudentValue(st,["roll","Roll","ROLL","Roll No","RollNo"])||"").trim();
+
+  const sem1Map={}, sem2Map={};
+  sem1Rows.forEach(r=>{ sem1Map[keyOf(r.student)]=r; });
+  sem2Rows.forEach(r=>{ sem2Map[keyOf(r.student)]=r; });
+
+  combinedRows=students.map((s,i)=>{
+    const k=keyOf(s);
+    const r1=sem1Map[k], r2=sem2Map[k];
+    const sem1Theory=r1&&r1.theory!==""?Number(r1.theory)||0:null;
+    const sem2Theory=r2&&r2.theory!==""?Number(r2.theory)||0:null;
+    const comp=r2&&r2.component!==""?Number(r2.component)||0:null;
+    return {sl:i+1,student:s,sem1Theory,sem2Theory,comp};
+  });
+
+  renderCombined();
+}
+
+function renderCombined(){
+  const scheme=SCHEMES[document.getElementById("combSubject").value];
+  if(!scheme || !combinedRows.length){
+    document.getElementById("combinedBody").innerHTML=
+      "<tr><td colspan='9'>Select a subject and click Generate.</td></tr>";
+    return;
+  }
+
+  const sex=document.getElementById("combSex").value;
+  const q=(document.getElementById("combSearch").value||"").toLowerCase().trim();
+  const compMax=scheme.practical||scheme.project;
+
+  const rows=combinedRows.filter(r=>{
+    const gender=getStudentSex(r.student).toLowerCase();
+    const reg=String(getStudentReg(r.student)||"").toLowerCase();
+    const name=String(getStudentName(r.student)||"").toLowerCase();
+    return (sex==="ALL"||gender===sex.toLowerCase()) && (!q||reg.includes(q)||name.includes(q));
+  });
+
+  const body=document.getElementById("combinedBody");
+
+  body.innerHTML=rows.length ? rows.map(r=>{
+    const allEntered = r.sem1Theory!==null && r.sem2Theory!==null && r.comp!==null;
+    const total = (r.sem1Theory||0)+(r.sem2Theory||0)+(r.comp||0);
+
+    let result="";
+    if(allEntered){
+      const sem1Pass=r.sem1Theory >= Math.ceil(scheme.theory*0.30);
+      const sem2Pass=r.sem2Theory >= Math.ceil(scheme.theory*0.30);
+      const compPass=r.comp >= Math.ceil(compMax*0.30);
+      result = (sem1Pass&&sem2Pass&&compPass) ? "PASS":"FAIL";
+    }
+
+    return `<tr>
+      <td>${r.sl}</td>
+      <td>${escapeHtml(getStudentReg(r.student))}</td>
+      <td>${escapeHtml(getStudentName(r.student))}</td>
+      <td>${escapeHtml(getStudentSex(r.student))}</td>
+      <td>${r.sem1Theory===null?"—":r.sem1Theory}</td>
+      <td>${r.sem2Theory===null?"—":r.sem2Theory}</td>
+      <td>${r.comp===null?"—":r.comp}</td>
+      <td>${allEntered?total:"—"}</td>
+      <td class="result">${result?`<span class="badge ${result==="PASS"?"pass":"fail"}">${result}</span>`:""}</td>
+    </tr>`;
+  }).join("") : "<tr><td colspan='9'>No students match the selected filter.</td></tr>";
+}
+
+function printCombined(){
+  const subject=document.getElementById("combSubject").value;
+  if(!subject){ alert("Select a subject first."); return; }
+  if(!combinedRows.length){ alert("Generate the combined result first."); return; }
+  printElement("combinedBody",`COMBINED RESULT — FULL MARKS 100 | ${subject}`);
 }
 
 /* DASHBOARD */
