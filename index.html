@@ -1,20 +1,1004 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>XI Semester Command Center</title><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><style>
-:root{--b:#123a8c;--bg:#f3f6fb;--c:#fff;--line:#dce3ef;--mut:#64748b}*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial;background:var(--bg);color:#172033}.top{background:linear-gradient(135deg,#0b2458,#2563eb);color:white;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}.top h1{margin:0;font-size:25px}.top p{margin:5px 0 0;opacity:.85}.status{padding:8px 12px;background:#ffffff22;border-radius:20px;font-size:13px}.layout{display:flex;min-height:calc(100vh - 86px)}aside{width:235px;background:#0a1731;padding:15px}.nav{display:block;width:100%;padding:12px;margin:3px 0;border:0;border-radius:9px;background:none;color:#cbd5e1;text-align:left;cursor:pointer}.nav.active,.nav:hover{background:#1d4ed8;color:#fff}main{flex:1;padding:24px;max-width:1550px;margin:auto;width:100%}.view{display:none}.view.active{display:block}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}.card,.stat{background:var(--c);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px;box-shadow:0 8px 25px #0f172a0a}.stat small{color:var(--mut)}.num{font-size:30px;font-weight:700;margin-top:8px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.field label{display:block;font-size:12px;color:var(--mut);margin-bottom:5px}.field input,.field select{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}button{padding:9px 13px;border:1px solid #cbd5e1;background:#fff;border-radius:8px;font-weight:600;cursor:pointer}.primary{background:#1d4ed8;color:#fff;border-color:#1d4ed8}.table{overflow:auto;border:1px solid var(--line);border-radius:9px}table{width:100%;border-collapse:collapse;min-width:700px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}th{background:#f8fafc}.pill{padding:4px 8px;border-radius:20px;font-size:12px;font-weight:700}.pass{background:#dcfce7;color:#166534}.fail{background:#fee2e2;color:#991b1b}.pending{background:#fef3c7;color:#92400e}.notice{padding:10px;background:#eff6ff;color:#1e40af;border-radius:8px;margin:10px 0}.muted{color:var(--mut)}input.mark{width:80px;padding:7px}.empty{text-align:center;padding:30px;color:var(--mut)}@media(max-width:900px){aside{width:65px}.nav span{display:none}.cards,.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.top{padding:14px}.layout{display:block}aside{width:100%;display:flex;overflow:auto}.nav{min-width:max-content}.nav span{display:inline}main{padding:12px}.cards,.grid{grid-template-columns:1fr}}@media print{aside,.top,.noprint{display:none!important}.view{display:none}.view.active{display:block}}
-</style></head><body>
-<header class="top"><div><h1>XI Semester Command Center</h1><p>Taldangra Fulmati High School · Class XI · 2026</p></div><div id="status" class="status">Firebase: checking…</div></header>
-<div class="layout"><aside><button class="nav active" data-v="dash">🏠 <span>Dashboard</span></button><button class="nav" data-v="students">👨‍🎓 <span>Students</span></button><button class="nav" data-v="attendance">📅 <span>Attendance</span></button><button class="nav" data-v="marks">📝 <span>Marks Entry</span></button><button class="nav" data-v="results">📊 <span>Results</span></button><button class="nav" data-v="rules">📚 <span>WBCHSE Rules</span></button></aside><main>
-<section id="dash" class="view active"><h2>Dashboard</h2><p class="muted">Class XI academic command centre</p><div class="cards"><div class="stat"><small>Total Students</small><div class="num" id="nStudents">0</div></div><div class="stat"><small>Subjects</small><div class="num" id="nSubjects">0</div></div><div class="stat"><small>Attendance Records</small><div class="num" id="nAtt">0</div></div><div class="stat"><small>Marks Records</small><div class="num" id="nMarks">0</div></div></div><div class="card"><h3>Quick Actions</h3><div class="toolbar"><button class="primary" onclick="go('students')">Import Students</button><button onclick="go('attendance')">Attendance</button><button onclick="go('marks')">Marks Entry</button><button onclick="go('results')">Result Analysis</button></div></div></section>
-<section id="students" class="view"><h2>Student Database</h2><div class="card noprint"><div class="grid"><div class="field"><label>Excel</label><input id="file" type="file" accept=".xlsx,.xls,.xlsm"></div><div class="field"><label>Search</label><input id="sq" placeholder="Name / registration / subject"></div></div><div class="toolbar"><button class="primary" onclick="importExcel()">Import Excel</button><button onclick="saveStudents()">Save to Firebase</button><button onclick="print()">Print</button><span id="msg" class="muted"></span></div></div><div class="card"><div class="table"><table id="studentsTable"></table></div></div></section>
-<section id="attendance" class="view"><h2>Subject-wise Attendance</h2><div class="card noprint"><div class="grid"><div class="field"><label>Subject</label><select id="asub"></select></div><div class="field"><label>Date</label><input id="adate" type="date"></div><div class="field"><label>Period</label><input id="aperiod" placeholder="1st Period"></div><div class="field"><label>Search</label><input id="aq" placeholder="Name / registration"></div></div><div class="toolbar"><button class="primary" onclick="attendance()">Generate</button><button onclick="allAtt('P')">All Present</button><button onclick="allAtt('A')">All Absent</button><button onclick="saveAtt()">Save</button><button onclick="print()">Print</button></div></div><div class="card"><div id="ainfo"></div><div class="table"><table id="attTable"></table></div></div></section>
-<section id="marks" class="view"><h2>Marks Entry</h2><div class="card noprint"><div class="grid"><div class="field"><label>Semester</label><select id="sem"><option value="sem1">Semester I</option><option value="sem1sup">Semester I Supplementary</option><option value="sem2">Semester II</option></select></div><div class="field"><label>Subject</label><select id="msub"></select></div><div class="field"><label>Search</label><input id="mq" placeholder="Name / registration"></div></div><div id="scheme" class="notice"></div><div class="toolbar"><button class="primary" onclick="marks()">Load Marks</button><button onclick="saveMarks()">Save Marks</button><button onclick="print()">Print</button></div></div><div class="card"><div class="table"><table id="marksTable"></table></div></div></section>
-<section id="results" class="view"><h2>Result Analysis</h2><div class="card"><div class="table"><table id="resultTable"></table></div></div></section>
-<section id="rules" class="view"><h2>WBCHSE Class XI Rules Used</h2><div class="card"><ul><li>Class XI has Semester I and Semester II.</li><li>Semester I is MCQ-based; Semester II uses conventional answer scripts.</li><li>Semester I, Semester II, Supplementary, Practical and Project marks are submitted at the end of Semester II.</li><li>The portal checks theory and project/practical independently.</li><li>Supplied 2026 school record: 40-mark theory → pass 12; 35-mark theory → pass 11; 20-mark project → pass 6; 30-mark practical → pass 9.</li></ul></div></section>
-</main></div>
-<script type="module">
-import{initializeApp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js';import{getAuth,signInAnonymously,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';import{getFirestore,collection,doc,setDoc,getDocs,serverTimestamp}from'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
-const cfg={apiKey:'AIzaSyCiqQFsnbSi6eCgUI_W3NTybzIkRmCI_54',authDomain:'tfhs-portal.firebaseapp.com',projectId:'tfhs-portal',storageBucket:'tfhs-portal.firebasestorage.app',messagingSenderId:'316041012204',appId:'1:316041012204:web:04ee8b19374c60f63716c9'};const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app);let user=null,students=[],subjects=[],attRows=[],markRows=[];const schemes={BNGA:[40,12,'Project',20,6],ENGB:[40,12,'Project',20,6],SNSK:[40,12,'Project',20,6],MATH:[40,12,'Project',20,6],PHIL:[40,12,'Project',20,6],HIST:[40,12,'Project',20,6],SANT:[40,12,'Project',20,6],COMA:[35,11,'Practical',30,9],GEGR:[35,11,'Practical',30,9],BIOS:[35,11,'Practical',30,9],PHYS:[35,11,'Practical',30,9],CHEM:[35,11,'Practical',30,9],COMS:[35,11,'Practical',30,9]};const $=x=>document.getElementById(x);function go(id){document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');document.querySelector(`[data-v="${id}"]`).classList.add('active');if(id==='results')results()}document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>go(b.dataset.v));onAuthStateChanged(auth,u=>{user=u;$('status').textContent=u?'Firebase: connected':'Firebase: not connected'});signInAnonymously(auth).catch(()=>{});$('adate').value=new Date().toISOString().slice(0,10);
-function norm(x){return String(x??'').trim()}function uniq(a){return[...new Set(a.filter(Boolean))]}function fill(){['asub','msub'].forEach(id=>$(id).innerHTML=subjects.map(s=>`<option>${s}</option>`).join(''))}function renderStudents(){let q=norm($('sq').value).toLowerCase();let r=students.filter(s=>`${s.name} ${s.registration} ${s.subjects}`.toLowerCase().includes(q));$('studentsTable').innerHTML='<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Gender</th><th>Subjects</th></tr></thead><tbody>'+r.map((s,i)=>`<tr><td>${i+1}</td><td>${s.registration}</td><td>${s.name}</td><td>${s.gender}</td><td>${s.subjects.join(', ')}</td></tr>`).join('')+'</tbody>'} $('sq').oninput=renderStudents;
-window.importExcel=async()=>{let f=$('file').files[0];if(!f)return alert('Choose Excel file.');let wb=XLSX.read(await f.arrayBuffer(),{type:'array'}),all=[];['HS-26','XI-REG'].forEach(n=>{if(wb.Sheets[n])all.push(...XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''}))});if(!all.length)all=[].concat(...wb.SheetNames.map(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''})));let out=[],seen=new Set();all.forEach(r=>{let txt=r.map(norm);let ri=txt.findIndex(x=>/registration|regn|roll/i.test(x));let ni=txt.findIndex(x=>/student.*name|^name$/i.test(x));if(ri<0||ni<0)return;let reg=norm(r[ri]),name=norm(r[ni]);if(!reg&&!name)return;let g=r.find((x,i)=>i!==ri&&i!==ni&&/^(male|female|m|f)$/i.test(norm(x)))||'';let subs=uniq(r.filter((x,i)=>i!==ri&&i!==ni&&/^[A-Za-z]{3,5}$/.test(norm(x))));let k=reg||name;if(!seen.has(k)){seen.add(k);out.push({registration:reg,name,gender:norm(g),subjects:subs})}});students=out;subjects=uniq(students.flatMap(s=>s.subjects));fill();renderStudents();$('msg').textContent=`Imported ${students.length} students / ${subjects.length} subjects`;dash();};window.saveStudents=async()=>{if(!user)return alert('Firebase sign-in not ready.');await setDoc(doc(db,'students','xi2026'),{students,subjects,updatedAt:serverTimestamp()});alert('Student database saved.');};
-window.attendance=()=>{let sub=$('asub').value,q=$('aq').value.toLowerCase();attRows=students.filter(s=>(!sub||s.subjects.includes(sub))&&`${s.name} ${s.registration}`.toLowerCase().includes(q)).map(s=>({registration:s.registration,name:s.name,status:'P'}));$('ainfo').innerHTML=`<div class="notice"><b>${sub}</b> · ${$('adate').value} · ${attRows.length} students</div>`;$('attTable').innerHTML='<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Attendance</th></tr></thead><tbody>'+attRows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.registration}</td><td>${r.name}</td><td><select onchange="attRows[${i}].status=this.value"><option value="P">Present</option><option value="A">Absent</option></select></td></tr>`).join('')+'</tbody>'};window.allAtt=v=>{attRows.forEach(r=>r.status=v);attendance()};window.saveAtt=async()=>{if(!user||!attRows.length)return alert('Generate attendance first.');let id=(`${$('asub').value}_${$('adate').value}_${$('aperiod').value}`).replace(/[^A-Za-z0-9_-]/g,'_');await setDoc(doc(db,'xiAttendance',id),{subject:$('asub').value,date:$('adate').value,period:$('aperiod').value,rows:attRows,updatedAt:serverTimestamp()});alert('Attendance saved.');};
-function updateScheme(){let s=schemes[$('msub').value];$('scheme').textContent=s?`Theory ${s[0]} (Pass ${s[1]}) · ${s[2]} ${s[3]} (Pass ${s[4]})`:'No configured scheme for this subject.'} $('msub').onchange=updateScheme;window.marks=()=>{let sub=$('msub').value,s=schemes[sub],q=$('mq').value.toLowerCase();markRows=students.filter(x=>(!sub||x.subjects.includes(sub))&&`${x.name} ${x.registration}`.toLowerCase().includes(q)).map(x=>({...x,theory:'',component:''}));$('marksTable').innerHTML=`<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Theory / ${s?.[0]||'—'}</th><th>${s?.[2]||'Project/Practical'} / ${s?.[3]||'—'}</th><th>Result</th></tr></thead><tbody>`+markRows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.registration}</td><td>${r.name}</td><td><input class="mark" type="number" max="${s?.[0]||100}" onchange="markRows[${i}].theory=this.value;markResult(${i})"></td><td><input class="mark" type="number" max="${s?.[3]||100}" onchange="markRows[${i}].component=this.value;markResult(${i})"></td><td id="res${i}"><span class="pill pending">Pending</span></td></tr>`).join('')+'</tbody>'};window.markResult=i=>{let s=schemes[$('msub').value],r=markRows[i],ok=s&&+r.theory>=s[1]&&+r.component>=s[4];$('res'+i).innerHTML=`<span class="pill ${ok?'pass':'fail'}">${ok?'PASS':'FAIL'}</span>`};window.saveMarks=async()=>{if(!user||!markRows.length)return alert('Load marks first.');let id=`${$('sem').value}_${$('msub').value}`;await setDoc(doc(db,'xiMarks',id),{semester:$('sem').value,subject:$('msub').value,rows:markRows,scheme:schemes[$('msub').value]||null,updatedAt:serverTimestamp()});alert('Marks saved.');};window.results=()=>{$('resultTable').innerHTML='<thead><tr><th>#</th><th>Registration</th><th>Name</th><th>Subjects</th><th>Status</th></tr></thead><tbody>'+students.map((s,i)=>`<tr><td>${i+1}</td><td>${s.registration}</td><td>${s.name}</td><td>${s.subjects.join(', ')}</td><td><span class="pill pending">Enter marks</span></td></tr>`).join('')+'</tbody>'};async function dash(){ $('nStudents').textContent=students.length;$('nSubjects').textContent=subjects.length;try{$('nAtt').textContent=(await getDocs(collection(db,'xiAttendance'))).size;$('nMarks').textContent=(await getDocs(collection(db,'xiMarks'))).size}catch(e){$('nAtt').textContent='—';$('nMarks').textContent='—'}}dash();renderStudents();fill();updateScheme();
-</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>TFHS — Class XI Examination Dashboard</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;font-family:Arial,Helvetica,sans-serif;
+  background:#f1f5f9;color:#172033
+}
+button,input,select{font:inherit}
+button{cursor:pointer}
+.app{display:flex;min-height:100vh}
+
+/* SIDEBAR */
+.sidebar{
+  width:250px;background:#0f172a;color:white;
+  padding:20px 14px;position:fixed;left:0;top:0;bottom:0;
+  overflow-y:auto
+}
+.logo{
+  font-size:20px;font-weight:800;padding:8px 10px 22px;
+  border-bottom:1px solid #334155;margin-bottom:18px
+}
+.logo small{display:block;font-size:11px;color:#94a3b8;margin-top:5px}
+.nav button{
+  display:block;width:100%;border:0;background:transparent;
+  color:#cbd5e1;text-align:left;padding:13px 14px;
+  border-radius:9px;margin:4px 0
+}
+.nav button:hover,.nav button.active{
+  background:#2563eb;color:white
+}
+.userbox{
+  position:absolute;bottom:15px;left:14px;right:14px;
+  border-top:1px solid #334155;padding-top:12px;
+  font-size:12px;color:#94a3b8
+}
+
+/* MAIN */
+.main{margin-left:250px;width:calc(100% - 250px)}
+.topbar{
+  height:65px;background:white;border-bottom:1px solid #e2e8f0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 25px;position:sticky;top:0;z-index:10
+}
+.status{font-size:13px;color:#475569}
+.status span{
+  display:inline-block;width:9px;height:9px;border-radius:50%;
+  background:#f59e0b;margin-right:6px
+}
+.content{padding:25px}
+.view{display:none}
+.view.active{display:block}
+.title{
+  font-size:25px;font-weight:800;margin-bottom:5px
+}
+.subtitle{color:#64748b;margin-bottom:22px}
+
+/* CARDS */
+.cards{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
+  margin-bottom:22px
+}
+.card{
+  background:white;border-radius:14px;padding:20px;
+  border:1px solid #e2e8f0;box-shadow:0 2px 8px #00000008
+}
+.card .label{color:#64748b;font-size:13px}
+.card .value{font-size:28px;font-weight:800;margin-top:8px}
+.blue{color:#2563eb}
+.green{color:#16a34a}
+.orange{color:#ea580c}
+.purple{color:#7c3aed}
+
+/* PANELS */
+.panel{
+  background:white;border:1px solid #e2e8f0;border-radius:14px;
+  padding:20px;margin-bottom:20px
+}
+.panel h3{margin:0 0 16px}
+.toolbar{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:end
+}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;color:#64748b;font-weight:700}
+input,select{
+  padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;
+  background:white;min-width:150px
+}
+input:focus,select:focus{
+  outline:2px solid #93c5fd;border-color:#2563eb
+}
+.btn{
+  border:0;border-radius:8px;padding:10px 15px;
+  background:#2563eb;color:white;font-weight:700
+}
+.btn:hover{filter:brightness(.94)}
+.btn.secondary{background:#475569}
+.btn.success{background:#16a34a}
+.btn.warning{background:#ea580c}
+.btn.danger{background:#dc2626}
+.btn.light{background:#e2e8f0;color:#172033}
+
+/* TABLE */
+.tablewrap{overflow:auto;margin-top:18px}
+table{width:100%;border-collapse:collapse;min-width:650px}
+th,td{
+  padding:10px 11px;border-bottom:1px solid #e2e8f0;
+  text-align:left;font-size:13px
+}
+th{background:#f8fafc;color:#475569}
+tr:hover td{background:#f8fafc}
+.badge{
+  display:inline-block;padding:4px 8px;border-radius:999px;
+  font-size:11px;font-weight:700
+}
+.present{background:#dcfce7;color:#166534}
+.absent{background:#fee2e2;color:#991b1b}
+.pass{background:#dcfce7;color:#166534}
+.fail{background:#fee2e2;color:#991b1b}
+
+/* ATTENDANCE */
+.attendance-buttons{
+  display:flex;gap:6px;flex-wrap:wrap
+}
+.attendance-buttons button{
+  border:0;padding:6px 9px;border-radius:6px;
+  font-size:11px;font-weight:700
+}
+.pbtn{background:#dcfce7;color:#166534}
+.abtn{background:#fee2e2;color:#991b1b}
+
+/* MARKS */
+.scheme{
+  background:#eff6ff;border:1px solid #bfdbfe;
+  border-radius:10px;padding:13px;margin-top:15px;
+  color:#1e40af;font-size:13px
+}
+.markinput{
+  width:85px;min-width:85px;padding:7px
+}
+.result{
+  font-weight:800
+}
+
+/* QUICK */
+.quick{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:15px
+}
+.quick button{
+  text-align:left;background:white;border:1px solid #e2e8f0;
+  padding:18px;border-radius:12px
+}
+.quick button:hover{border-color:#2563eb}
+.quick strong{display:block;margin-bottom:5px}
+.quick span{font-size:12px;color:#64748b}
+
+/* FOOTER */
+.footer{
+  text-align:center;color:#94a3b8;font-size:12px;
+  padding:25px
+}
+
+/* MOBILE */
+@media(max-width:900px){
+  .sidebar{width:210px}
+  .main{margin-left:210px;width:calc(100% - 210px)}
+  .cards{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:650px){
+  .sidebar{
+    position:relative;width:100%;height:auto
+  }
+  .userbox{position:static;margin-top:15px}
+  .app{display:block}
+  .main{margin-left:0;width:100%}
+  .cards,.quick{grid-template-columns:1fr}
+  .topbar{position:relative}
+  .content{padding:14px}
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<aside class="sidebar">
+  <div class="logo">
+    TFHS EXAM PORTAL
+    <small>Class XI • Semester System</small>
+  </div>
+
+  <div class="nav">
+    <button class="active" onclick="showView('dashboard',this)">🏠 Dashboard</button>
+    <button onclick="showView('students',this)">👨‍🎓 Students / Excel</button>
+    <button onclick="showView('attendance',this)">📅 Attendance</button>
+    <button onclick="showView('marks',this)">📝 Marks Entry</button>
+    <button onclick="showView('analysis',this)">📊 Result Analysis</button>
+    <button onclick="showView('rules',this)">📚 WBCHSE Rules</button>
+  </div>
+
+  <div class="userbox">
+    <div>Firebase: <b id="authUser">Connecting...</b></div>
+    <div style="margin-top:5px">Taldangra Fulmati High School</div>
+  </div>
+</aside>
+
+<main class="main">
+
+<header class="topbar">
+  <strong>Class XI Examination Command Center</strong>
+  <div class="status"><span id="statusDot"></span><b id="statusText">Connecting Firebase...</b></div>
+</header>
+
+<div class="content">
+
+<!-- DASHBOARD -->
+<section id="dashboard" class="view active">
+  <div class="title">Dashboard</div>
+  <div class="subtitle">Class XI Semester I & Semester II Academic Management</div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Total Students</div>
+      <div class="value blue" id="dashStudents">0</div>
+    </div>
+    <div class="card">
+      <div class="label">Subjects</div>
+      <div class="value purple" id="dashSubjects">0</div>
+    </div>
+    <div class="card">
+      <div class="label">Attendance Records</div>
+      <div class="value green" id="dashAttendance">0</div>
+    </div>
+    <div class="card">
+      <div class="label">Marks Records</div>
+      <div class="value orange" id="dashMarks">0</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Quick Actions</h3>
+    <div class="quick">
+      <button onclick="showView('students')">
+        <strong>👨‍🎓 Student Database</strong>
+        <span>Import and manage Class XI student data</span>
+      </button>
+      <button onclick="showView('attendance')">
+        <strong>📅 Take Attendance</strong>
+        <span>Enter subject-wise attendance</span>
+      </button>
+      <button onclick="showView('marks')">
+        <strong>📝 Enter Marks</strong>
+        <span>Semester-wise marks and result</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>System Status</h3>
+    <div id="dashboardStatus">Loading...</div>
+  </div>
+</section>
+
+<!-- STUDENTS -->
+<section id="students" class="view">
+  <div class="title">Student Database</div>
+  <div class="subtitle">Import, search, edit and save Class XI students</div>
+
+  <div class="panel">
+    <h3>Import Student Excel</h3>
+    <div class="toolbar">
+      <div class="field">
+        <label>Excel File</label>
+        <input type="file" id="excelFile" accept=".xlsx,.xls,.xlsm">
+      </div>
+      <button class="btn" onclick="importExcel()">Import Excel</button>
+      <button class="btn success" onclick="saveStudents()">Save Students</button>
+      <button class="btn secondary" onclick="printStudents()">Print</button>
+    </div>
+    <p style="font-size:12px;color:#64748b">
+      The first row of your Excel file should contain the column headings.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field" style="flex:1">
+        <label>Search</label>
+        <input id="studentSearch" placeholder="Name / Roll / Registration No." oninput="renderStudents()">
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead id="studentHead"></thead>
+        <tbody id="studentBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ATTENDANCE -->
+<section id="attendance" class="view">
+  <div class="title">Subject-wise Attendance</div>
+  <div class="subtitle">Enter and save daily attendance</div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field">
+        <label>Subject</label>
+        <select id="attSubject">
+          <option value="">Select Subject</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="attDate">
+      </div>
+
+      <div class="field">
+        <label>Period</label>
+        <select id="attPeriod">
+          <option>1</option><option>2</option><option>3</option>
+          <option>4</option><option>5</option><option>6</option>
+          <option>7</option><option>8</option>
+        </select>
+      </div>
+
+      <button class="btn" onclick="generateAttendance()">Generate Sheet</button>
+      <button class="btn success" onclick="markAllAttendance('P')">All Present</button>
+      <button class="btn danger" onclick="markAllAttendance('A')">All Absent</button>
+      <button class="btn warning" onclick="saveAttendance()">Save Attendance</button>
+      <button class="btn secondary" onclick="printAttendance()">Print</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field" style="flex:1">
+        <label>Search Student</label>
+        <input id="attendanceSearch" placeholder="Search by name or roll" oninput="renderAttendance()">
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SL</th>
+            <th>Roll</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- MARKS -->
+<section id="marks" class="view">
+  <div class="title">Marks Entry</div>
+  <div class="subtitle">Semester-wise theory / practical / project marks</div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field">
+        <label>Examination</label>
+        <select id="marksExam" onchange="loadMarks()">
+          <option value="SEM1">Semester I</option>
+          <option value="SUPP">Semester I Supplementary</option>
+          <option value="SEM2">Semester II</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Subject</label>
+        <select id="marksSubject" onchange="loadMarks()"></select>
+      </div>
+
+      <div class="field" style="flex:1">
+        <label>Search</label>
+        <input id="marksSearch" placeholder="Student name / roll" oninput="renderMarks()">
+      </div>
+
+      <button class="btn" onclick="loadMarks()">Load</button>
+      <button class="btn success" onclick="saveMarks()">Save Marks</button>
+      <button class="btn secondary" onclick="printMarks()">Print</button>
+    </div>
+
+    <div id="schemeBox" class="scheme">Select a subject.</div>
+  </div>
+
+  <div class="panel">
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SL</th>
+            <th>Roll</th>
+            <th>Name</th>
+            <th>Theory</th>
+            <th>Practical / Project</th>
+            <th>Total</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="marksBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ANALYSIS -->
+<section id="analysis" class="view">
+  <div class="title">Result Analysis</div>
+  <div class="subtitle">Current student and marks overview</div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Students</div>
+      <div class="value blue" id="analysisStudents">0</div>
+    </div>
+    <div class="card">
+      <div class="label">Marks Entered</div>
+      <div class="value green" id="analysisMarks">0</div>
+    </div>
+    <div class="card">
+      <div class="label">Pass</div>
+      <div class="value purple" id="analysisPass">0</div>
+    </div>
+    <div class="card">
+      <div class="label">Fail</div>
+      <div class="value orange" id="analysisFail">0</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Analysis</h3>
+    <p id="analysisText">Enter marks to generate the current analysis.</p>
+  </div>
+</section>
+
+<!-- RULES -->
+<section id="rules" class="view">
+  <div class="title">WBCHSE Rules</div>
+  <div class="subtitle">Class XI semester-system reference</div>
+
+  <div class="panel">
+    <h3>Semester Structure</h3>
+    <p>Class XI is conducted under the Semester I and Semester II system.</p>
+    <p>Semester I uses the prescribed MCQ-based examination pattern, while Semester II follows the conventional answer-script pattern.</p>
+    <p>Practical / Project components are completed as prescribed before the Semester II examination.</p>
+  </div>
+
+  <div class="panel">
+    <h3>Promotion / Result</h3>
+    <p>Students are required to satisfy the applicable Semester I and Semester II, theory and project/practical requirements.</p>
+    <p>The portal records the marks separately so that the school can maintain the examination record semester-wise.</p>
+  </div>
+
+  <div class="panel">
+    <h3>Important</h3>
+    <p>Always use the latest official WBCHSE notification, syllabus and examination instructions for final statutory decisions.</p>
+  </div>
+</section>
+
+</div>
+
+<div class="footer">
+  Taldangra Fulmati High School • Class XI Examination Portal
+</div>
+
+</main>
+</div>
+
+<script>
+/* ================= FIREBASE ================= */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCiqQFsnbSi6eCgUI_W3NTybzIkRmCI_54",
+  authDomain: "tfhs-portal.firebaseapp.com",
+  projectId: "tfhs-portal",
+  storageBucket: "tfhs-portal.firebasestorage.app",
+  messagingSenderId: "316041012204",
+  appId: "1:316041012204:web:04ee8b19374c60f63716c9"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+let students = [];
+let attendanceRows = [];
+let marksRows = [];
+let importedHeaders = [];
+
+/* SUBJECT SCHEMES */
+const SCHEMES = {
+  BNGA:{theory:40,practical:0,project:20},
+  ENGB:{theory:40,practical:0,project:20},
+  SNSK:{theory:40,practical:0,project:20},
+  MATH:{theory:40,practical:0,project:20},
+  PHIL:{theory:40,practical:0,project:20},
+  HIST:{theory:40,practical:0,project:20},
+  SANT:{theory:40,practical:0,project:20},
+
+  COMA:{theory:35,practical:30,project:0},
+  GEGR:{theory:35,practical:30,project:0},
+  BIOS:{theory:35,practical:30,project:0},
+  PHYS:{theory:35,practical:30,project:0},
+  CHEM:{theory:35,practical:30,project:0},
+  COMS:{theory:35,practical:30,project:0}
+};
+
+const SUBJECTS = Object.keys(SCHEMES);
+
+/* AUTH */
+auth.signInAnonymously()
+.then(()=>{
+  document.getElementById("authUser").textContent="Connected";
+  document.getElementById("statusText").textContent="Firebase Connected";
+  document.getElementById("statusDot").style.background="#16a34a";
+  document.getElementById("dashboardStatus").innerHTML=
+    "<b style='color:#16a34a'>Firebase connected successfully.</b>";
+  loadStudents();
+})
+.catch(err=>{
+  document.getElementById("authUser").textContent="Error";
+  document.getElementById("statusText").textContent="Firebase Error";
+  document.getElementById("statusDot").style.background="#dc2626";
+  document.getElementById("dashboardStatus").textContent=err.message;
+});
+
+/* NAVIGATION */
+function showView(id,btn){
+  document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+
+  document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
+  if(btn) btn.classList.add("active");
+
+  if(id==="analysis") updateAnalysis();
+}
+
+/* SUBJECT SELECTS */
+function populateSubjects(){
+  const a=document.getElementById("attSubject");
+  const m=document.getElementById("marksSubject");
+
+  a.innerHTML='<option value="">Select Subject</option>';
+  m.innerHTML="";
+
+  SUBJECTS.forEach(s=>{
+    a.innerHTML+=`<option value="${s}">${s}</option>`;
+    m.innerHTML+=`<option value="${s}">${s}</option>`;
+  });
+
+  updateScheme();
+}
+
+populateSubjects();
+
+document.getElementById("marksSubject").addEventListener("change",updateScheme);
+
+function updateScheme(){
+  const s=document.getElementById("marksSubject").value;
+  const x=SCHEMES[s];
+
+  if(!x){
+    document.getElementById("schemeBox").textContent="Select a subject.";
+    return;
+  }
+
+  let component=x.practical ? "Practical" : "Project";
+
+  document.getElementById("schemeBox").innerHTML=
+    `<b>${s}</b> — Theory: ${x.theory} marks, ${component}: ${x.practical||x.project} marks`;
+}
+
+/* STUDENTS */
+async function loadStudents(){
+  try{
+    const snap=await db.collection("students").doc("xi2026").get();
+
+    if(snap.exists && Array.isArray(snap.data().students)){
+      students=snap.data().students;
+    }
+
+    renderStudents();
+    updateDashboard();
+  }catch(e){
+    console.error(e);
+  }
+}
+
+function importExcel(){
+  const file=document.getElementById("excelFile").files[0];
+
+  if(!file){
+    alert("Please select an Excel file.");
+    return;
+  }
+
+  const reader=new FileReader();
+
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(e.target.result,{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+
+      if(!rows.length){
+        alert("Excel file contains no data.");
+        return;
+      }
+
+      importedHeaders=Object.keys(rows[0]);
+
+      students=rows.map((r,i)=>({
+        sl:i+1,
+        ...r
+      }));
+
+      renderStudents();
+      updateDashboard();
+
+      alert(students.length+" students imported.");
+    }catch(err){
+      alert("Excel import error: "+err.message);
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+function renderStudents(){
+  const head=document.getElementById("studentHead");
+  const body=document.getElementById("studentBody");
+  const q=(document.getElementById("studentSearch").value||"").toLowerCase();
+
+  if(!students.length){
+    head.innerHTML="";
+    body.innerHTML="<tr><td colspan='10'>No students loaded.</td></tr>";
+    return;
+  }
+
+  const headers=importedHeaders.length
+    ? importedHeaders
+    : Object.keys(students[0]).filter(x=>x!=="sl");
+
+  head.innerHTML="<tr><th>SL</th>"+
+    headers.map(h=>`<th>${escapeHtml(h)}</th>`).join("")+
+    "</tr>";
+
+  const filtered=students.filter(s=>
+    Object.values(s).join(" ").toLowerCase().includes(q)
+  );
+
+  body.innerHTML=filtered.map((s,i)=>
+    "<tr><td>"+(i+1)+"</td>"+
+    headers.map(h=>`<td>${escapeHtml(s[h]??"")}</td>`).join("")+
+    "</tr>"
+  ).join("");
+}
+
+async function saveStudents(){
+  if(!students.length){
+    alert("No students to save.");
+    return;
+  }
+
+  try{
+    await db.collection("students").doc("xi2026").set({
+      students:students,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    alert("Student database saved successfully.");
+    updateDashboard();
+  }catch(e){
+    alert("Save failed: "+e.message);
+  }
+}
+
+function printStudents(){
+  printElement("studentBody","Student Database");
+}
+
+/* ATTENDANCE */
+function generateAttendance(){
+  if(!students.length){
+    alert("Please import/load students first.");
+    return;
+  }
+
+  attendanceRows=students.map((s,i)=>({
+    sl:i+1,
+    student:s,
+    status:"P"
+  }));
+
+  renderAttendance();
+}
+
+function renderAttendance(){
+  const body=document.getElementById("attendanceBody");
+  const q=(document.getElementById("attendanceSearch").value||"").toLowerCase();
+
+  const rows=attendanceRows.filter(r=>
+    Object.values(r.student).join(" ").toLowerCase().includes(q)
+  );
+
+  body.innerHTML=rows.map((r,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(findStudentValue(r.student,["roll","Roll","ROLL","Roll No","RollNo"]))}</td>
+      <td>${escapeHtml(findStudentValue(r.student,["name","Name","NAME","Student Name"]))}</td>
+      <td>
+        <span class="badge ${r.status==="P"?"present":"absent"}">
+          ${r.status==="P"?"PRESENT":"ABSENT"}
+        </span>
+      </td>
+      <td>
+        <div class="attendance-buttons">
+          <button class="pbtn" onclick="setAttendance(${attendanceRows.indexOf(r)},'P')">P</button>
+          <button class="abtn" onclick="setAttendance(${attendanceRows.indexOf(r)},'A')">A</button>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function setAttendance(i,status){
+  attendanceRows[i].status=status;
+  renderAttendance();
+}
+
+function markAllAttendance(status){
+  attendanceRows.forEach(r=>r.status=status);
+  renderAttendance();
+}
+
+async function saveAttendance(){
+  const subject=document.getElementById("attSubject").value;
+  const date=document.getElementById("attDate").value;
+  const period=document.getElementById("attPeriod").value;
+
+  if(!subject||!date){
+    alert("Select subject and date.");
+    return;
+  }
+
+  if(!attendanceRows.length){
+    alert("Generate the attendance sheet first.");
+    return;
+  }
+
+  const id=`${subject}_${date}_${period}`.replace(/[\/\s]/g,"_");
+
+  try{
+    await db.collection("xiAttendance").doc(id).set({
+      subject,
+      date,
+      period,
+      rows:attendanceRows.map(r=>({
+        student:r.student,
+        status:r.status
+      })),
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    alert("Attendance saved successfully.");
+    updateDashboard();
+  }catch(e){
+    alert("Attendance save failed: "+e.message);
+  }
+}
+
+function printAttendance(){
+  printElement("attendanceBody","Subject-wise Attendance");
+}
+
+/* MARKS */
+function loadMarks(){
+  const subject=document.getElementById("marksSubject").value;
+
+  marksRows=students.map((s,i)=>({
+    sl:i+1,
+    student:s,
+    theory:"",
+    component:""
+  }));
+
+  renderMarks();
+  updateScheme();
+}
+
+function renderMarks(){
+  const body=document.getElementById("marksBody");
+  const q=(document.getElementById("marksSearch").value||"").toLowerCase();
+
+  const rows=marksRows.filter(r=>
+    Object.values(r.student).join(" ").toLowerCase().includes(q)
+  );
+
+  body.innerHTML=rows.map(r=>{
+    const idx=marksRows.indexOf(r);
+    const scheme=SCHEMES[document.getElementById("marksSubject").value];
+
+    const theory=Number(r.theory)||0;
+    const component=Number(r.component)||0;
+    const total=theory+component;
+
+    const theoryPass=theory >= Math.ceil(scheme.theory*0.30);
+    const compMax=scheme.practical||scheme.project;
+    const compPass=component >= Math.ceil(compMax*0.30);
+    const result=(r.theory!==""&&r.component!=="")
+      ? (theoryPass&&compPass ? "PASS":"FAIL")
+      : "";
+
+    return `
+      <tr>
+        <td>${r.sl}</td>
+        <td>${escapeHtml(findStudentValue(r.student,["roll","Roll","ROLL","Roll No","RollNo"]))}</td>
+        <td>${escapeHtml(findStudentValue(r.student,["name","Name","NAME","Student Name"]))}</td>
+        <td>
+          <input class="markinput" type="number" min="0"
+            max="${scheme.theory}" value="${r.theory}"
+            onchange="setMark(${idx},'theory',this.value)">
+        </td>
+        <td>
+          <input class="markinput" type="number" min="0"
+            max="${compMax}" value="${r.component}"
+            onchange="setMark(${idx},'component',this.value)">
+        </td>
+        <td>${total}</td>
+        <td class="result">
+          ${result ? `<span class="badge ${result==="PASS"?"pass":"fail"}">${result}</span>`:""}
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function setMark(i,key,value){
+  marksRows[i][key]=value;
+  renderMarks();
+}
+
+async function saveMarks(){
+  const exam=document.getElementById("marksExam").value;
+  const subject=document.getElementById("marksSubject").value;
+
+  if(!subject){
+    alert("Select a subject.");
+    return;
+  }
+
+  if(!marksRows.length){
+    alert("Load the marks sheet first.");
+    return;
+  }
+
+  const id=`${exam}_${subject}`;
+
+  try{
+    await db.collection("xiMarks").doc(id).set({
+      exam,
+      subject,
+      rows:marksRows.map(r=>({
+        student:r.student,
+        theory:r.theory,
+        component:r.component
+      })),
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    alert("Marks saved successfully.");
+    updateDashboard();
+  }catch(e){
+    alert("Marks save failed: "+e.message);
+  }
+}
+
+function printMarks(){
+  printElement("marksBody","Marks Entry");
+}
+
+/* DASHBOARD */
+function updateDashboard(){
+  document.getElementById("dashStudents").textContent=students.length;
+  document.getElementById("dashSubjects").textContent=SUBJECTS.length;
+}
+
+async function updateAnalysis(){
+  document.getElementById("analysisStudents").textContent=students.length;
+
+  try{
+    const snap=await db.collection("xiMarks").get();
+    let entered=0,pass=0,fail=0;
+
+    snap.forEach(doc=>{
+      const data=doc.data();
+      (data.rows||[]).forEach(r=>{
+        if(r.theory!=="" || r.component!==""){
+          entered++;
+
+          const s=SCHEMES[data.subject];
+          if(s){
+            const t=Number(r.theory)||0;
+            const c=Number(r.component)||0;
+
+            if(
+              t>=Math.ceil(s.theory*.30) &&
+              c>=Math.ceil((s.practical||s.project)*.30)
+            ) pass++;
+            else fail++;
+          }
+        }
+      });
+    });
+
+    document.getElementById("analysisMarks").textContent=entered;
+    document.getElementById("analysisPass").textContent=pass;
+    document.getElementById("analysisFail").textContent=fail;
+
+    document.getElementById("analysisText").textContent=
+      `Marks entries recorded: ${entered}. Pass records: ${pass}. Fail records: ${fail}.`;
+
+  }catch(e){
+    document.getElementById("analysisText").textContent=e.message;
+  }
+}
+
+/* HELPERS */
+function findStudentValue(obj,names){
+  for(const n of names){
+    if(obj[n]!==undefined && obj[n]!==null && obj[n]!=="")
+      return obj[n];
+  }
+
+  const keys=Object.keys(obj);
+  const name=names[0].toLowerCase();
+
+  const key=keys.find(k=>k.toLowerCase().includes(name));
+
+  return key ? obj[key] : "";
+}
+
+function escapeHtml(value){
+  return String(value)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function printElement(bodyId,title){
+  const body=document.getElementById(bodyId).parentElement.parentElement.innerHTML;
+
+  const w=window.open("","_blank");
+
+  w.document.write(`
+    <html>
+    <head>
+      <title>${title}</title>
+      <style>
+        body{font-family:Arial;padding:20px}
+        table{width:100%;border-collapse:collapse}
+        th,td{border:1px solid #999;padding:7px}
+        th{background:#eee}
+      </style>
+    </head>
+    <body>
+      <h2>${title}</h2>
+      ${body}
+    </body>
+    </html>
+  `);
+
+  w.document.close();
+  w.print();
+}
+</script>
+
+</body>
+</html>
