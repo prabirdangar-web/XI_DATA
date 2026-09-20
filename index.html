@@ -313,32 +313,37 @@ tr:hover td{background:#f8fafc}
 <!-- ATTENDANCE -->
 <section id="attendance" class="view">
   <div class="title">Subject-wise Attendance</div>
-  <div class="subtitle">Enter and save daily attendance</div>
+  <div class="subtitle">Date-wise exam attendance — filter by subject, sex and registration number</div>
 
   <div class="panel">
     <div class="toolbar">
       <div class="field">
-        <label>Subject</label>
-        <select id="attSubject">
+        <label>Exam Subject</label>
+        <select id="attSubject" onchange="setExamDateFromSubject()">
           <option value="">Select Subject</option>
         </select>
       </div>
 
       <div class="field">
-        <label>Date</label>
-        <input type="date" id="attDate">
+        <label>Exam Date</label>
+        <input type="text" id="attDate" placeholder="DD-MM-YYYY" readonly>
       </div>
 
       <div class="field">
-        <label>Period</label>
-        <select id="attPeriod">
-          <option>1</option><option>2</option><option>3</option>
-          <option>4</option><option>5</option><option>6</option>
-          <option>7</option><option>8</option>
+        <label>Sex</label>
+        <select id="attSex" onchange="renderAttendance()">
+          <option value="ALL">All</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
         </select>
       </div>
 
-      <button class="btn" onclick="generateAttendance()">Generate Sheet</button>
+      <div class="field" style="min-width:220px">
+        <label>Registration No. / Name</label>
+        <input id="attendanceSearch" placeholder="Registration No. / Name" oninput="renderAttendance()">
+      </div>
+
+      <button class="btn" onclick="generateAttendance()">Generate All</button>
       <button class="btn success" onclick="markAllAttendance('P')">All Present</button>
       <button class="btn danger" onclick="markAllAttendance('A')">All Absent</button>
       <button class="btn warning" onclick="saveAttendance()">Save Attendance</button>
@@ -347,20 +352,14 @@ tr:hover td{background:#f8fafc}
   </div>
 
   <div class="panel">
-    <div class="toolbar">
-      <div class="field" style="flex:1">
-        <label>Search Student</label>
-        <input id="attendanceSearch" placeholder="Search by name or roll" oninput="renderAttendance()">
-      </div>
-    </div>
-
     <div class="tablewrap">
       <table>
         <thead>
           <tr>
             <th>SL</th>
-            <th>Roll</th>
+            <th>Registration No.</th>
             <th>Name</th>
+            <th>Sex</th>
             <th>Status</th>
             <th>Action</th>
           </tr>
@@ -530,6 +529,14 @@ const SCHEMES = {
 
 const SUBJECTS = Object.keys(SCHEMES);
 
+const EXAM_SCHEDULE = {
+  BNGA:"21-09-2026", ENGB:"24-09-2026", HIST:"30-09-2026", PHIL:"03-10-2026",
+  SNSK:"05-10-2026", GEGR:"01-10-2026", COMA:"29-09-2026", BIOS:"07-10-2026",
+  CHEM:"01-10-2026", PHYS:"28-09-2026", MATH:"05-10-2026", COMS:"29-09-2026",
+  SANT:"21-09-2026", POLS:"07-10-2026"
+};
+const ATTENDANCE_SUBJECTS = Object.keys(EXAM_SCHEDULE);
+
 /* AUTH */
 auth.signInAnonymously()
 .then(()=>{
@@ -566,12 +573,21 @@ function populateSubjects(){
   a.innerHTML='<option value="">Select Subject</option>';
   m.innerHTML="";
 
+  ATTENDANCE_SUBJECTS.forEach(s=>{
+    a.innerHTML+=`<option value="${s}">${s} — ${EXAM_SCHEDULE[s]}</option>`;
+  });
+
   SUBJECTS.forEach(s=>{
-    a.innerHTML+=`<option value="${s}">${s}</option>`;
     m.innerHTML+=`<option value="${s}">${s}</option>`;
   });
 
   updateScheme();
+  setExamDateFromSubject();
+}
+
+function setExamDateFromSubject(){
+  const subject=document.getElementById("attSubject").value;
+  document.getElementById("attDate").value=EXAM_SCHEDULE[subject]||"";
 }
 
 populateSubjects();
@@ -708,97 +724,55 @@ function printStudents(){
 }
 
 /* ATTENDANCE */
+function getStudentSex(student){
+  return String(findStudentValue(student,["gender","Gender","GENDER","sex","Sex","SEX"])||"").trim();
+}
+function getStudentReg(student){
+  return findStudentValue(student,["registration","Registration","REGISTRATION","Registration No","Registration No.","Reg No","Reg No."]);
+}
+function getStudentName(student){
+  return findStudentValue(student,["name","Name","NAME","Student Name"]);
+}
 function generateAttendance(){
-  if(!students.length){
-    alert("Please import/load students first.");
-    return;
-  }
-
-  attendanceRows=students.map((s,i)=>({
-    sl:i+1,
-    student:s,
-    status:"P"
-  }));
-
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  const subject=document.getElementById("attSubject").value;
+  if(!subject){ alert("Select the exam subject first."); return; }
+  setExamDateFromSubject();
+  attendanceRows=students.map((s,i)=>({sl:i+1,student:s,status:"P"}));
   renderAttendance();
 }
-
 function renderAttendance(){
   const body=document.getElementById("attendanceBody");
-  const q=(document.getElementById("attendanceSearch").value||"").toLowerCase();
-
-  const rows=attendanceRows.filter(r=>
-    Object.values(r.student).join(" ").toLowerCase().includes(q)
-  );
-
-  body.innerHTML=rows.map((r,i)=>`
-    <tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(findStudentValue(r.student,["roll","Roll","ROLL","Roll No","RollNo"]))}</td>
-      <td>${escapeHtml(findStudentValue(r.student,["name","Name","NAME","Student Name"]))}</td>
-      <td>
-        <span class="badge ${r.status==="P"?"present":"absent"}">
-          ${r.status==="P"?"PRESENT":"ABSENT"}
-        </span>
-      </td>
-      <td>
-        <div class="attendance-buttons">
-          <button class="pbtn" onclick="setAttendance(${attendanceRows.indexOf(r)},'P')">P</button>
-          <button class="abtn" onclick="setAttendance(${attendanceRows.indexOf(r)},'A')">A</button>
-        </div>
-      </td>
-    </tr>
-  `).join("");
+  const q=(document.getElementById("attendanceSearch").value||"").toLowerCase().trim();
+  const sex=document.getElementById("attSex").value;
+  const rows=attendanceRows.filter(r=>{
+    const gender=getStudentSex(r.student).toLowerCase();
+    const reg=String(getStudentReg(r.student)||"").toLowerCase();
+    const name=String(getStudentName(r.student)||"").toLowerCase();
+    return (sex==="ALL" || gender===sex.toLowerCase()) && (!q || reg.includes(q) || name.includes(q));
+  });
+  body.innerHTML=rows.length ? rows.map(r=>{
+    const idx=attendanceRows.indexOf(r);
+    return `<tr><td>${r.sl}</td><td>${escapeHtml(getStudentReg(r.student))}</td><td>${escapeHtml(getStudentName(r.student))}</td><td>${escapeHtml(getStudentSex(r.student))}</td><td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td><td><div class="attendance-buttons"><button class="pbtn" onclick="setAttendance(${idx},'P')">P</button><button class="abtn" onclick="setAttendance(${idx},'A')">A</button></div></td></tr>`;
+  }).join("") : "<tr><td colspan='6'>No students match the selected filter.</td></tr>";
 }
-
-function setAttendance(i,status){
-  attendanceRows[i].status=status;
-  renderAttendance();
-}
-
-function markAllAttendance(status){
-  attendanceRows.forEach(r=>r.status=status);
-  renderAttendance();
-}
-
+function setAttendance(i,status){ attendanceRows[i].status=status; renderAttendance(); }
+function markAllAttendance(status){ attendanceRows.forEach(r=>r.status=status); renderAttendance(); }
 async function saveAttendance(){
   const subject=document.getElementById("attSubject").value;
   const date=document.getElementById("attDate").value;
-  const period=document.getElementById("attPeriod").value;
-
-  if(!subject||!date){
-    alert("Select subject and date.");
-    return;
-  }
-
-  if(!attendanceRows.length){
-    alert("Generate the attendance sheet first.");
-    return;
-  }
-
-  const id=`${subject}_${date}_${period}`.replace(/[\/\s]/g,"_");
-
+  if(!subject||!date){ alert("Select the exam subject."); return; }
+  if(!attendanceRows.length){ alert("Generate the attendance sheet first."); return; }
+  const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
   try{
-    await db.collection("xiAttendance").doc(id).set({
-      subject,
-      date,
-      period,
-      rows:attendanceRows.map(r=>({
-        student:r.student,
-        status:r.status
-      })),
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    alert("Attendance saved successfully.");
-    updateDashboard();
-  }catch(e){
-    alert("Attendance save failed: "+e.message);
-  }
+    await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    alert(`Attendance saved: ${subject} — ${date}`); updateDashboard();
+  }catch(e){ alert("Attendance save failed: "+e.message); }
 }
-
 function printAttendance(){
-  printElement("attendanceBody","Subject-wise Attendance");
+  const subject=document.getElementById("attSubject").value, date=document.getElementById("attDate").value;
+  if(!subject||!date){ alert("Select the exam subject first."); return; }
+  printElement("attendanceBody",`ATTENDANCE RECORD – XI-2026 ANNUAL EXAMINATION | ${subject} | ${date}`);
 }
 
 /* MARKS */
