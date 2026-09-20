@@ -816,29 +816,55 @@ function getStudentName(student){
   return findStudentValue(student,["name","Name","NAME","Student Name"]);
 }
 
-/* SUBJECT ENROLLMENT — one column per subject code (e.g. BNGA, SANT, PHYS...) with Yes/blank */
+/* SUBJECT ENROLLMENT — one column per subject with Yes/blank. Matches by code (MATH) or common full name (MATHEMATICS). */
+const SUBJECT_ALIASES={
+  BNGA:["bnga","bengali","beng","bng"],
+  ENGB:["engb","english","eng"],
+  SNSK:["snsk","sanskrit","sansk"],
+  MATH:["math","maths","mathematics"],
+  PHIL:["phil","philosophy"],
+  HIST:["hist","history"],
+  SANT:["sant","santali"],
+  COMA:["coma","commerce(a)","commercea"],
+  GEGR:["gegr","geography","geo"],
+  BIOS:["bios","biology","bio","biologicalscience"],
+  PHYS:["phys","physics"],
+  CHEM:["chem","chemistry"],
+  COMS:["coms","computerscience","computer","compsc"],
+  POLS:["pols","politicalscience","political","polsc"]
+};
+function normalizeHeader(h){
+  return String(h||"").toLowerCase().trim().replace(/[^a-z0-9]/g,"");
+}
 function findSubjectColumnKey(student,subjectCode){
   const keys=Object.keys(student);
-  const target=subjectCode.toLowerCase().trim();
-  let key=keys.find(k=>k.toLowerCase().trim()===target);
-  if(!key) key=keys.find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,"")===target);
+  const target=normalizeHeader(subjectCode);
+  const aliases=(SUBJECT_ALIASES[subjectCode]||[subjectCode.toLowerCase()]).map(normalizeHeader);
+  let key=keys.find(k=>normalizeHeader(k)===target);
+  if(!key) key=keys.find(k=>aliases.includes(normalizeHeader(k)));
   return key||null;
 }
 function getSubjectFlag(student,subjectCode){
   const key=findSubjectColumnKey(student,subjectCode);
-  if(!key) return undefined; // no such column in this Excel — can't tell
+  if(!key) return undefined; // no such column found on this student
   const val=String(student[key]||"").trim().toUpperCase();
   if(val===""||["N","NO","0","-","NIL","X","ABSENT"].includes(val)) return false;
   return true;
 }
+// Does ANY imported student have a column matching this subject at all?
+function subjectColumnExistsInData(subjectCode){
+  return students.some(s=>findSubjectColumnKey(s,subjectCode)!==null);
+}
 function studentTakesSubject(student,subjectCode){
   const flag=getSubjectFlag(student,subjectCode);
-  return flag===undefined ? true : flag; // if the column is missing entirely, don't wrongly exclude everyone
+  return flag===undefined ? false : flag;
 }
 function subjectWiseCounts(subjectList){
   const counts={};
   subjectList.forEach(code=>{
-    counts[code]=students.filter(s=>studentTakesSubject(s,code)).length;
+    counts[code]=subjectColumnExistsInData(code)
+      ? students.filter(s=>studentTakesSubject(s,code)).length
+      : null; // null = no matching column found anywhere in the imported data
   });
   return counts;
 }
@@ -848,14 +874,29 @@ function renderSubjectCounts(){
   if(!students.length){ box.innerHTML="Import students to see subject-wise counts."; return; }
   const allCodes=Array.from(new Set([...SUBJECTS,...ATTENDANCE_SUBJECTS]));
   const counts=subjectWiseCounts(allCodes);
-  box.innerHTML=allCodes.map(code=>
-    `<span class="badge" style="background:#e2e8f0;color:#172033;margin:3px">${code}: <b>${counts[code]}</b></span>`
-  ).join(" ");
+  box.innerHTML=allCodes.map(code=>{
+    const c=counts[code];
+    return c===null
+      ? `<span class="badge" style="background:#fee2e2;color:#991b1b;margin:3px">${code}: no column found</span>`
+      : `<span class="badge" style="background:#e2e8f0;color:#172033;margin:3px">${code}: <b>${c}</b></span>`;
+  }).join(" ")+
+  `<p style="font-size:12px;color:#64748b;margin-top:10px">Columns imported: ${escapeHtml((importedHeaders||[]).join(", ")||"—")}</p>`;
+}
+// Returns true if OK to proceed, false (with an alert already shown) if the subject column is missing entirely
+function checkSubjectColumn(subject){
+  if(subjectColumnExistsInData(subject)) return true;
+  alert(
+    `Could not find a column for "${subject}" in the imported XI-REG data.\n\n`+
+    `Columns found: ${(importedHeaders||[]).join(", ")||"(none — please re-import the Excel)"}\n\n`+
+    `Please check the exact column header used for ${subject} in your Excel sheet and let me know so I can fix the match.`
+  );
+  return false;
 }
 function generateAttendance(){
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
   const subject=document.getElementById("attSubject").value;
   if(!subject){ alert("Select the exam subject first."); return; }
+  if(!checkSubjectColumn(subject)) return;
   setExamDateFromSubject();
   const eligible=students.filter(s=>studentTakesSubject(s,subject));
   if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
@@ -901,9 +942,9 @@ function loadMarks(){
   const subject=document.getElementById("marksSubject").value;
   if(!subject){ marksRows=[]; renderMarks(); updateScheme(); return; }
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  if(!checkSubjectColumn(subject)) return;
 
   const eligible=students.filter(s=>studentTakesSubject(s,subject));
-  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
 
   marksRows=eligible.map((s,i)=>({
     sl:i+1,
@@ -1015,6 +1056,7 @@ async function generateCombined(){
   const subject=document.getElementById("combSubject").value;
   if(!subject){ alert("Select a subject first."); return; }
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  if(!checkSubjectColumn(subject)) return;
 
   const scheme=SCHEMES[subject];
   if(!scheme){ alert("No marks scheme found for this subject."); return; }
