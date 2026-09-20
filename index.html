@@ -295,6 +295,11 @@ tr:hover td{background:#f8fafc}
   </div>
 
   <div class="panel">
+    <h3>Subject-wise Student Count</h3>
+    <div id="subjectCountBox">Import students to see subject-wise counts.</div>
+  </div>
+
+  <div class="panel">
     <div class="toolbar">
       <div class="field" style="flex:1">
         <label>Search</label>
@@ -810,12 +815,51 @@ function getStudentReg(student){
 function getStudentName(student){
   return findStudentValue(student,["name","Name","NAME","Student Name"]);
 }
+
+/* SUBJECT ENROLLMENT — one column per subject code (e.g. BNGA, SANT, PHYS...) with Yes/blank */
+function findSubjectColumnKey(student,subjectCode){
+  const keys=Object.keys(student);
+  const target=subjectCode.toLowerCase().trim();
+  let key=keys.find(k=>k.toLowerCase().trim()===target);
+  if(!key) key=keys.find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,"")===target);
+  return key||null;
+}
+function getSubjectFlag(student,subjectCode){
+  const key=findSubjectColumnKey(student,subjectCode);
+  if(!key) return undefined; // no such column in this Excel — can't tell
+  const val=String(student[key]||"").trim().toUpperCase();
+  if(val===""||["N","NO","0","-","NIL","X","ABSENT"].includes(val)) return false;
+  return true;
+}
+function studentTakesSubject(student,subjectCode){
+  const flag=getSubjectFlag(student,subjectCode);
+  return flag===undefined ? true : flag; // if the column is missing entirely, don't wrongly exclude everyone
+}
+function subjectWiseCounts(subjectList){
+  const counts={};
+  subjectList.forEach(code=>{
+    counts[code]=students.filter(s=>studentTakesSubject(s,code)).length;
+  });
+  return counts;
+}
+function renderSubjectCounts(){
+  const box=document.getElementById("subjectCountBox");
+  if(!box) return;
+  if(!students.length){ box.innerHTML="Import students to see subject-wise counts."; return; }
+  const allCodes=Array.from(new Set([...SUBJECTS,...ATTENDANCE_SUBJECTS]));
+  const counts=subjectWiseCounts(allCodes);
+  box.innerHTML=allCodes.map(code=>
+    `<span class="badge" style="background:#e2e8f0;color:#172033;margin:3px">${code}: <b>${counts[code]}</b></span>`
+  ).join(" ");
+}
 function generateAttendance(){
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
   const subject=document.getElementById("attSubject").value;
   if(!subject){ alert("Select the exam subject first."); return; }
   setExamDateFromSubject();
-  attendanceRows=students.map((s,i)=>({sl:i+1,student:s,status:"P"}));
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
+  attendanceRows=eligible.map((s,i)=>({sl:i+1,student:s,status:"P"}));
   renderAttendance();
 }
 function renderAttendance(){
@@ -855,8 +899,13 @@ function printAttendance(){
 /* MARKS */
 function loadMarks(){
   const subject=document.getElementById("marksSubject").value;
+  if(!subject){ marksRows=[]; renderMarks(); updateScheme(); return; }
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
 
-  marksRows=students.map((s,i)=>({
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
+
+  marksRows=eligible.map((s,i)=>({
     sl:i+1,
     student:s,
     theory:"",
@@ -996,7 +1045,10 @@ async function generateCombined(){
   sem1Rows.forEach(r=>{ sem1Map[keyOf(r.student)]=r; });
   sem2Rows.forEach(r=>{ sem2Map[keyOf(r.student)]=r; });
 
-  combinedRows=students.map((s,i)=>{
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
+
+  combinedRows=eligible.map((s,i)=>{
     const k=keyOf(s);
     const r1=sem1Map[k], r2=sem2Map[k];
     const sem1Theory=r1&&r1.theory!==""?Number(r1.theory)||0:null;
@@ -1066,6 +1118,7 @@ function printCombined(){
 function updateDashboard(){
   document.getElementById("dashStudents").textContent=students.length;
   document.getElementById("dashSubjects").textContent=SUBJECTS.length;
+  renderSubjectCounts();
 }
 
 async function updateAnalysis(){
