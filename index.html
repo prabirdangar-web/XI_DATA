@@ -237,7 +237,7 @@ tr:hover td{background:#f8fafc}
   <button onclick="loginUser()">Sign In</button>
   <button onclick="logoutUser()">Sign Out</button>
   <span class="role-badge" id="roleBadge">VIEWER</span>
-  <span id="roleMessage">Read-only until staff/admin login.</span>
+  <span id="roleMessage">Read-only until an authorised existing staff/admin account is signed in.</span>
 </div>
 
 <div class="content">
@@ -376,7 +376,7 @@ tr:hover td{background:#f8fafc}
     </div>
   </div>
 
-  <div id="attendanceLockBox" class="lockbox">Select a subject to check attendance lock status.</div>
+  <div id="attendanceLockBox" class="lockbox">Select a subject to check attendance lock status.</div><div class="lockbox ok" style="margin-top:8px">Protection: Invigilator/Staff may enter attendance only while OPEN. After Submit &amp; Lock, only Admin can unlock or correct it.</div>
 
   <div class="panel">
     <div class="tablewrap">
@@ -430,7 +430,7 @@ tr:hover td{background:#f8fafc}
       <button class="btn secondary" onclick="printMarks()">Print</button>
     </div>
 
-    <div id="schemeBox" class="scheme">Select a subject.</div>
+    <div id="schemeBox" class="scheme">Select a subject.</div><div class="lockbox ok" style="margin-top:8px">Protection: Staff/Teacher may edit assigned marks while OPEN. Finalized marks are read-only; only Admin can unlock.</div>
   </div>
 
   <div class="panel">
@@ -625,45 +625,104 @@ const EXAM_SCHEDULE = {
 };
 const ATTENDANCE_SUBJECTS = Object.keys(EXAM_SCHEDULE);
 
-/* AUTH + ROLE PROTECTION */
+/* AUTH + EXISTING STAFF ROLE PROTECTION */
+/*
+   IMPORTANT: This dashboard keeps the existing TFHS staff system:
+   Firebase Authentication account -> users/{AUTH_UID}.role
+   Supported roles: admin, staff, teacher, invigilator.
+   No new staff accounts or replacement login system is created here.
+*/
 let currentUser=null;
 let currentRole="viewer";
+let currentUserProfile={};
 let attendanceLocked=false;
+let attendanceOwnerUid=null;
 let marksLocked=false;
+let marksOwnerUid=null;
 let resultLocked=false;
+
+function roleIs(...roles){ return roles.includes(String(currentRole||"").toLowerCase()); }
+function isAdmin(){ return roleIs("admin"); }
+function canAttendance(){ return roleIs("admin","staff","teacher","invigilator"); }
+function canMarks(){ return roleIs("admin","staff","teacher"); }
+function canResult(){ return roleIs("admin","staff","teacher"); }
+function canEdit(){ return canAttendance() || canMarks() || canResult(); }
+function canEditUnlocked(ownerUid){
+  if(isAdmin()) return true;
+  if(!canEdit()) return false;
+  return !ownerUid || !currentUser || ownerUid===currentUser.uid;
+}
+function requireAttendance(){ if(!canAttendance()){ alert("Attendance entry permission is not available for this account."); return false; } return true; }
+function requireMarks(){ if(!canMarks()){ alert("Marks entry permission is not available for this account."); return false; } return true; }
+function requireResult(){ if(!canResult()){ alert("Result assembly permission is not available for this account."); return false; } return true; }
+function requireEdit(){ if(!canEdit()){ alert("Please sign in with an authorised Staff/Teacher/Invigilator account."); return false; } return true; }
+function requireAdmin(){ if(!isAdmin()){ alert("Administrator permission required for this action."); return false; } return true; }
+
+function listValue(v){
+  if(Array.isArray(v)) return v.map(x=>String(x).trim()).filter(Boolean);
+  if(typeof v==="string") return v.split(/[,|]/).map(x=>x.trim()).filter(Boolean);
+  return [];
+}
+function assignedTo(field,value){
+  const list=listValue(currentUserProfile && currentUserProfile[field]);
+  return !list.length || list.includes("*") || list.map(x=>x.toUpperCase()).includes(String(value||"").toUpperCase());
+}
+function requireAssigned(field,value,label){
+  if(isAdmin()) return true;
+  if(!assignedTo(field,value)){ alert("This "+label+" is not assigned to your staff account."); return false; }
+  return true;
+}
 
 async function loadUserRole(user){
   currentUser=user;
-  if(!user){ currentRole="viewer"; applyRoleUI(); return; }
+  currentUserProfile={};
+  currentRole="viewer";
+  if(!user){ applyRoleUI(); return; }
+  if(user.isAnonymous){ applyRoleUI(); return; }
   try{
     const snap=await db.collection("users").doc(user.uid).get();
-    currentRole=snap.exists && snap.data().role ? String(snap.data().role).toLowerCase() : (user.isAnonymous?"viewer":"staff");
+    if(snap.exists){
+      currentUserProfile=snap.data()||{};
+      currentRole=String(currentUserProfile.role||"viewer").toLowerCase();
+    }
   }catch(e){
-    currentRole=user.isAnonymous?"viewer":"staff";
+    console.warn("Existing staff role lookup failed:",e);
+    currentRole="viewer";
   }
   applyRoleUI();
 }
-function isAdmin(){ return currentRole==="admin"; }
-function canEdit(){ return currentRole==="admin" || currentRole==="staff" || currentRole==="teacher"; }
-function requireEdit(){ if(!canEdit()){ alert("Staff/Admin login required for data entry."); return false; } return true; }
-function requireAdmin(){ if(!isAdmin()){ alert("Administrator permission required for this action."); return false; } return true; }
+
 function applyRoleUI(){
   const badge=document.getElementById("roleBadge");
   const msg=document.getElementById("roleMessage");
   if(badge) badge.textContent=currentRole.toUpperCase();
-  if(msg) msg.textContent=isAdmin()?"Administrator: full control, unlock and finalization enabled.":canEdit()?"Staff/Teacher: data entry enabled; locked records cannot be edited or deleted.":"Viewer: read-only access.";
+  if(msg){
+    if(isAdmin()) msg.textContent="Admin: full control, unlock, correct and finalize.";
+    else if(roleIs("invigilator")) msg.textContent="Invigilator: exam-room attendance only; submitted attendance is locked.";
+    else if(roleIs("staff","teacher")) msg.textContent="Staff/Teacher: assigned attendance, marks and result work; locked records cannot be edited/deleted.";
+    else msg.textContent="Read-only until an authorised existing staff account is signed in.";
+  }
+
   const adminIds=["saveStudentsBtn","unlockAttendanceBtn","unlockMarksBtn","unlockResultBtn"];
   adminIds.forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=isAdmin()?"inline-block":"none";});
+
+  const marksSection=document.querySelector('.nav button[onclick*="showView(\'marks\'"]');
+  const resultSection=document.querySelector('.nav button[onclick*="showView(\'combined\'"]');
+  if(marksSection) marksSection.style.display=canMarks()?"block":"none";
+  if(resultSection) resultSection.style.display=canResult()?"block":"none";
+
   updateAttendanceLockUI(); updateMarksLockUI(); updateResultLockUI();
 }
+
 async function loginUser(){
   const email=document.getElementById("loginEmail").value.trim();
   const password=document.getElementById("loginPassword").value;
-  if(!email||!password){alert("Enter staff/admin email and password.");return;}
+  if(!email||!password){alert("Enter your existing staff/admin email and password.");return;}
   try{ await auth.signInWithEmailAndPassword(email,password); }
   catch(e){ alert("Sign in failed: "+e.message); }
 }
 async function logoutUser(){ try{ await auth.signOut(); await auth.signInAnonymously(); }catch(e){ alert(e.message); } }
+
 auth.onAuthStateChanged(async user=>{
   await loadUserRole(user);
   if(user && !user.isAnonymous){
@@ -674,9 +733,10 @@ auth.onAuthStateChanged(async user=>{
     document.getElementById("statusText").textContent="Firebase Connected";
   }
 });
+
 auth.signInAnonymously().then(()=>{
   document.getElementById("statusDot").style.background="#16a34a";
-  document.getElementById("dashboardStatus").innerHTML="<b style='color:#16a34a'>Firebase connected. Sign in as Staff/Admin for protected data entry.</b>";
+  document.getElementById("dashboardStatus").innerHTML="<b style='color:#16a34a'>Firebase connected. Sign in using your existing TFHS staff/admin account for protected data entry.</b>";
   loadStudents();
 }).catch(err=>{
   document.getElementById("authUser").textContent="Error";
@@ -687,6 +747,8 @@ auth.signInAnonymously().then(()=>{
 
 /* NAVIGATION */
 function showView(id,btn){
+  if(id==="marks" && !canMarks()){ alert("Marks Entry is restricted to authorised Staff/Teacher/Admin accounts."); return; }
+  if(id==="combined" && !canResult()){ alert("Combined Result is restricted to authorised Staff/Teacher/Admin accounts."); return; }
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 
@@ -986,10 +1048,11 @@ function checkSubjectColumn(subject){
   return false;
 }
 async function generateAttendance(){
-  if(!requireEdit()) return;
+  if(!requireAttendance()) return;
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
   const subject=document.getElementById("attSubject").value;
   if(!subject){ alert("Select the exam subject first."); return; }
+  if(!requireAssigned("assignedAttendanceSubjects",subject,"subject")) return;
   if(!checkSubjectColumn(subject)) return;
   setExamDateFromSubject();
   const date=document.getElementById("attDate").value;
@@ -998,14 +1061,14 @@ async function generateAttendance(){
     const snap=await db.collection("xiAttendance").doc(id).get();
     const eligible=students.filter(s=>studentTakesSubject(s,subject));
     if(snap.exists){
-      const d=snap.data(); attendanceLocked=!!d.locked;
+      const d=snap.data(); attendanceLocked=!!d.locked; attendanceOwnerUid=d.ownerUid||d.updatedBy||null;
       const saved=d.rows||[];
       attendanceRows=eligible.map((s,i)=>{
         const key=String(getStudentReg(s)||getStudentRoll(s)||getStudentName(s)||"").trim();
         const old=saved.find(r=>String(getStudentReg(r.student)||getStudentRoll(r.student)||getStudentName(r.student)||"").trim()===key);
         return {sl:i+1,student:s,status:old?.status||"P"};
       });
-    }else{ attendanceLocked=false; attendanceRows=eligible.map((s,i)=>({sl:i+1,student:s,status:"P"})); }
+    }else{ attendanceLocked=false; attendanceOwnerUid=null; attendanceRows=eligible.map((s,i)=>({sl:i+1,student:s,status:"P"})); }
     if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
     renderAttendance(); updateAttendanceLockUI();
   }catch(e){ alert("Could not load attendance: "+e.message); }
@@ -1025,26 +1088,41 @@ function renderAttendance(){
     return `<tr><td>${r.sl}</td><td>${escapeHtml(getStudentReg(r.student))}</td><td>${escapeHtml(getStudentName(r.student))}</td><td>${escapeHtml(getStudentSex(r.student))}</td><td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td><td><div class="attendance-buttons"><button class="pbtn" onclick="setAttendance(${idx},'P')">P</button><button class="abtn" onclick="setAttendance(${idx},'A')">A</button></div></td></tr>`;
   }).join("") : "<tr><td colspan='6'>No students match the selected filter.</td></tr>";
 }
-function setAttendance(i,status){ if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;} if(!requireEdit())return; attendanceRows[i].status=status; renderAttendance(); }
-function markAllAttendance(status){ if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;} if(!requireEdit())return; attendanceRows.forEach(r=>r.status=status); renderAttendance(); }
+function setAttendance(i,status){
+  if(!requireAttendance())return;
+  if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;}
+  if(!canEditUnlocked(attendanceOwnerUid)){alert('This attendance record is assigned to another staff member. Only Admin can change it.');return;}
+  attendanceRows[i].status=status; renderAttendance();
+}
+function markAllAttendance(status){
+  if(!requireAttendance())return;
+  if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;}
+  if(!canEditUnlocked(attendanceOwnerUid)){alert('This attendance record is assigned to another staff member. Only Admin can change it.');return;}
+  attendanceRows.forEach(r=>r.status=status); renderAttendance();
+}
 async function saveAttendance(){
-  if(!requireEdit()||attendanceLocked) return;
+  if(!requireAttendance()||attendanceLocked) return;
   const subject=document.getElementById("attSubject").value; const date=document.getElementById("attDate").value;
   if(!subject||!date){ alert("Select the exam subject."); return; }
+  if(!requireAssigned("assignedAttendanceSubjects",subject,"subject")) return;
   if(!attendanceRows.length){ alert("Generate the attendance sheet first."); return; }
+  if(!canEditUnlocked(attendanceOwnerUid)){alert("This attendance record belongs to another staff member. Only Admin can change it.");return;}
   const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
   try{
-    await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),locked:false,updatedBy:currentUser?.uid||null,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),locked:false,ownerUid:attendanceOwnerUid||currentUser?.uid||null,updatedBy:currentUser?.uid||null,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    attendanceOwnerUid=attendanceOwnerUid||currentUser?.uid||null;
     alert(`Attendance draft saved: ${subject} — ${date}`); updateDashboard();
   }catch(e){ alert("Attendance save failed: "+e.message); }
 }
 async function lockAttendance(){
-  if(!requireEdit()||attendanceLocked) return;
+  if(!requireAttendance()||attendanceLocked) return;
   if(!attendanceRows.length){alert("Generate the attendance sheet first.");return;}
   if(!confirm("Submit and LOCK this attendance? Staff/Invigilator will not be able to edit it afterwards."))return;
   const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value;
+  if(!requireAssigned("assignedAttendanceSubjects",subject,"subject")) return;
+  if(!canEditUnlocked(attendanceOwnerUid)){alert("This attendance record belongs to another staff member. Only Admin can lock/change it.");return;}
   const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
-  try{ await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),locked:true,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); attendanceLocked=true; updateAttendanceLockUI(); alert("Attendance submitted and locked."); }catch(e){alert("Lock failed: "+e.message);}
+  try{ await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),locked:true,ownerUid:attendanceOwnerUid||currentUser?.uid||null,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); attendanceLocked=true; updateAttendanceLockUI(); alert("Attendance submitted and locked."); }catch(e){alert("Lock failed: "+e.message);}
 }
 async function unlockAttendance(){
   if(!requireAdmin())return;
@@ -1054,7 +1132,7 @@ async function unlockAttendance(){
 }
 function updateAttendanceLockUI(){
   const box=document.getElementById("attendanceLockBox"); if(box) {box.className="lockbox "+(attendanceLocked?"":"ok"); box.textContent=attendanceLocked?"🔒 ATTENDANCE LOCKED — Edit/mark buttons disabled. Admin unlock required.":"🔓 ATTENDANCE OPEN — Invigilator/Staff may enter attendance.";}
-  ["saveAttendanceBtn","lockAttendanceBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=attendanceLocked||!canEdit();});
+  ["saveAttendanceBtn","lockAttendanceBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=attendanceLocked||!canAttendance();});
 }
 function printAttendance(){
   const subject=document.getElementById("attSubject").value, date=document.getElementById("attDate").value;
@@ -1070,18 +1148,20 @@ async function loadMarks(){
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
   if(!checkSubjectColumn(subject)) return;
   const eligible=students.filter(s=>studentTakesSubject(s,subject));
-  try{ const snap=await db.collection("xiMarks").doc(`${exam}_${subject}`).get(); if(snap.exists){marksLocked=!!snap.data().locked; marksRows=(snap.data().rows||[]).map((r,i)=>({sl:i+1,student:r.student,theory:r.theory??"",component:r.component??""}));} else {marksRows=eligible.map((s,i)=>({sl:i+1,student:s,theory:"",component:""}));} }catch(e){alert("Could not load marks: "+e.message);return;}
+  try{ const snap=await db.collection("xiMarks").doc(`${exam}_${subject}`).get(); if(snap.exists){marksLocked=!!snap.data().locked; marksOwnerUid=snap.data().ownerUid||snap.data().updatedBy||null; marksRows=(snap.data().rows||[]).map((r,i)=>({sl:i+1,student:r.student,theory:r.theory??"",component:r.component??""}));} else {marksOwnerUid=null; marksRows=eligible.map((s,i)=>({sl:i+1,student:s,theory:"",component:""}));} }catch(e){alert("Could not load marks: "+e.message);return;}
   renderMarks(); updateScheme(); updateMarksLockUI();
 }
 function updateMarksLockUI(){
-  ["saveMarksBtn","lockMarksBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=marksLocked||!canEdit();});
+  ["saveMarksBtn","lockMarksBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=marksLocked||!canMarks();});
   const b=document.getElementById("schemeBox"); if(b && marksLocked) b.innerHTML+='<div class="lockbox">🔒 MARKS LOCKED — only Admin can unlock.</div>';
 }
 async function lockMarks(){
-  if(!requireEdit()||marksLocked)return; if(!marksRows.length){alert("Load marks first.");return;}
+  if(!requireMarks()||marksLocked)return; if(!marksRows.length){alert("Load marks first.");return;}
   if(!confirm("Finalize and LOCK these marks?"))return;
   const exam=document.getElementById("marksExam").value,subject=document.getElementById("marksSubject").value;
-  try{await db.collection("xiMarks").doc(`${exam}_${subject}`).set({exam,subject,rows:marksRows.map(r=>({student:r.student,theory:r.theory,component:r.component})),locked:true,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});marksLocked=true;updateMarksLockUI();alert("Marks finalized and locked.");}catch(e){alert("Lock failed: "+e.message);}
+  if(!requireAssigned("assignedSubjects",subject,"subject")) return;
+  if(!canEditUnlocked(marksOwnerUid)){alert("These marks are assigned to another staff member. Only Admin can finalize/change them.");return;}
+  try{await db.collection("xiMarks").doc(`${exam}_${subject}`).set({exam,subject,rows:marksRows.map(r=>({student:r.student,theory:r.theory,component:r.component})),ownerUid:marksOwnerUid||currentUser?.uid||null,updatedBy:currentUser?.uid||null,locked:true,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});marksLocked=true;updateMarksLockUI();alert("Marks finalized and locked.");}catch(e){alert("Lock failed: "+e.message);}
 }
 async function unlockMarks(){
   if(!requireAdmin())return; const exam=document.getElementById("marksExam").value,subject=document.getElementById("marksSubject").value;if(!subject)return;
@@ -1138,14 +1218,15 @@ function renderMarks(){
 }
 
 function setMark(i,key,value){
+  if(!requireMarks()) return;
   if(marksLocked){alert("Marks are locked. Only Admin can unlock.");renderMarks();return;}
-  if(!requireEdit()) return;
+  if(!canEditUnlocked(marksOwnerUid)){alert("These marks are assigned to another staff member. Only Admin can change them.");return;}
   marksRows[i][key]=value;
   renderMarks();
 }
 
 async function saveMarks(){
-  if(!requireEdit()||marksLocked) return;
+  if(!requireMarks()||marksLocked) return;
   const exam=document.getElementById("marksExam").value;
   const subject=document.getElementById("marksSubject").value;
 
@@ -1153,6 +1234,8 @@ async function saveMarks(){
     alert("Select a subject.");
     return;
   }
+  if(!requireAssigned("assignedSubjects",subject,"subject")) return;
+  if(!canEditUnlocked(marksOwnerUid)){alert("These marks are assigned to another staff member. Only Admin can change them.");return;}
 
   if(!marksRows.length){
     alert("Load the marks sheet first.");
@@ -1170,6 +1253,8 @@ async function saveMarks(){
         theory:r.theory,
         component:r.component
       })),
+      ownerUid:marksOwnerUid||currentUser?.uid||null,
+      updatedBy:currentUser?.uid||null,
       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
     });
 
@@ -1186,6 +1271,7 @@ function printMarks(){
 
 /* COMBINED RESULT (FM-100): Sem I Theory + Sem II Theory + Project/Practical */
 async function generateCombined(){
+  if(!requireResult()) return;
   const subject=document.getElementById("combSubject").value;
   if(!subject){ alert("Select a subject first."); return; }
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
@@ -1288,9 +1374,9 @@ async function getResultLock(subject){
   try{const s=await db.collection("xiResults").doc(subject).get();return s.exists&&!!s.data().locked;}catch(e){return false;}
 }
 async function refreshResultLock(){ resultLocked=await getResultLock(document.getElementById("combSubject").value); updateResultLockUI(); }
-function updateResultLockUI(){const b=document.getElementById("resultLockBox");if(b){b.className="lockbox "+(resultLocked?"":"ok");b.textContent=resultLocked?"🔒 RESULT FINALIZED — Staff cannot alter the assembled result.":"🔓 RESULT OPEN — Result can be assembled/reviewed.";} const f=document.getElementById("finalizeResultBtn");if(f)f.disabled=resultLocked||!canEdit();}
+function updateResultLockUI(){const b=document.getElementById("resultLockBox");if(b){b.className="lockbox "+(resultLocked?"":"ok");b.textContent=resultLocked?"🔒 RESULT FINALIZED — Staff cannot alter the assembled result.":"🔓 RESULT OPEN — Result can be assembled/reviewed.";} const f=document.getElementById("finalizeResultBtn");if(f)f.disabled=resultLocked||!canResult();}
 async function finalizeCombined(){
-  if(!requireEdit()||resultLocked)return; const subject=document.getElementById("combSubject").value;if(!subject){alert("Select a subject first.");return;}
+  if(!requireResult()||resultLocked)return; const subject=document.getElementById("combSubject").value;if(!subject){alert("Select a subject first.");return;}
   if(!confirm("Finalize and LOCK the assembled result for this subject?"))return;
   try{await db.collection("xiResults").doc(subject).set({subject,locked:true,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});resultLocked=true;updateResultLockUI();alert("Combined result finalized and locked.");}catch(e){alert("Result lock failed: "+e.message);}
 }
