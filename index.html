@@ -1161,19 +1161,22 @@ function printSignatureSheet(){
 
   const rowsHtml=eligible.map((s,i)=>`
     <tr>
-      <td>${i+1}</td>
-      <td>${escapeHtml(getStudentReg(s))}</td>
-      <td>${escapeHtml(getStudentName(s))}</td>
-      <td>${escapeHtml(getStudentSex(s))}</td>
-      <td class="sigcell"></td>
+      <td class="c-sl">${i+1}</td>
+      <td class="c-reg">${escapeHtml(String(getStudentReg(s)||"").toUpperCase())}</td>
+      <td class="c-name">${escapeHtml(String(getStudentName(s)||"").toUpperCase())}</td>
+      <td class="c-sex">${escapeHtml(String(getStudentSex(s)||"").toUpperCase())}</td>
+      <td class="sigcell sigwide"></td>
     </tr>`).join("");
 
   openPrintWindow({
     docTitle:`Signature Sheet - ${subject} - ${date}`,
+    uppercase:true,
+    tallRows:true,
     headerLines:[
       `<div class="school">Taldangra Fulmati High School</div>`,
       `<div class="exam">XI-2026 Annual Examination — Attendance / Signature Sheet</div>`,
-      `<div class="meta"><span><b>Subject:</b> ${escapeHtml(subject)}</span><span><b>Date:</b> ${escapeHtml(date)}</span><span><b>Class:</b> XI</span></div>`
+      `<div class="meta"><span><b>Subject:</b> ${escapeHtml(subject)}</span><span><b>Date:</b> ${escapeHtml(date)}</span><span><b>Class:</b> XI</span></div>`,
+      `<div class="meta"><span><b>School Name:</b> Taldangra Fulmati High School [H.S.]</span><span><b>H.S. Code:</b> 114071</span></div>`
     ],
     columns:["SL","Registration No.","Name","Sex","Signature of Student"],
     rowsHtml,
@@ -1458,7 +1461,7 @@ function printMarksEntrySheet(){
    Uses native <thead>/<tfoot> table semantics so the school/exam/subject/date header
    and the signature footer repeat automatically on EVERY printed page, however many
    students the list runs to. */
-function openPrintWindow({docTitle,headerLines,columns,rowsHtml,footerLines,orientation}){
+function openPrintWindow({docTitle,headerLines,columns,rowsHtml,footerLines,orientation,uppercase,tallRows}){
   const w=window.open("","_blank");
   if(!w){ alert("Please allow pop-ups to print this sheet."); return; }
   const headerHtml=headerLines.join("");
@@ -1484,6 +1487,14 @@ function openPrintWindow({docTitle,headerLines,columns,rowsHtml,footerLines,orie
         .doc-footer{border:0;padding-top:0}
         .doc-footer .sigline{display:flex;justify-content:space-between;padding-top:30px;font-size:12px;font-weight:600}
         .sigcell{min-width:110px;height:32px}
+        ${uppercase?`body{text-transform:uppercase}`:""}
+        ${tallRows?`
+        /* Signature sheet: fixed-width digits columns shrink to content; signature column takes the rest and rows are tall */
+        td.c-sl,td.c-reg,td.c-sex,th:nth-child(1),th:nth-child(2),th:nth-child(4){width:1%;white-space:nowrap;padding-left:5px;padding-right:5px;text-align:center}
+        td.c-name{width:auto;padding-left:6px}
+        th:nth-child(5),td.sigwide{width:38%}
+        tbody td{height:11mm;font-size:12px}
+        tr{page-break-inside:avoid}`:""}
       </style>
     </head>
     <body>
