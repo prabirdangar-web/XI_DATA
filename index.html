@@ -373,6 +373,7 @@ tr:hover td{background:#f8fafc}
       <button id="lockAttendanceBtn" class="btn danger" onclick="lockAttendance()">Submit &amp; Lock</button>
       <button id="unlockAttendanceBtn" class="btn secondary" onclick="unlockAttendance()">Admin Unlock</button>
       <button class="btn secondary" onclick="printAttendance()">Print</button>
+      <button class="btn secondary" onclick="printSignatureSheet()">Print Signature Sheet</button>
     </div>
   </div>
 
@@ -428,9 +429,12 @@ tr:hover td{background:#f8fafc}
       <button id="lockMarksBtn" class="btn danger" onclick="lockMarks()">Finalize &amp; Lock</button>
       <button id="unlockMarksBtn" class="btn secondary" onclick="unlockMarks()">Admin Unlock</button>
       <button class="btn secondary" onclick="printMarks()">Print</button>
+      <button class="btn secondary" onclick="printMarksEntrySheet()">Print Marks Entry Sheet</button>
     </div>
 
-    <div id="schemeBox" class="scheme">Select a subject.</div><div class="lockbox ok" style="margin-top:8px">Protection: Staff/Teacher may edit assigned marks while OPEN. Finalized marks are read-only; only Admin can unlock.</div>
+    <div id="schemeBox" class="scheme">Select a subject.</div>
+    <div id="marksAttendanceMsg" class="lockbox" style="margin-top:8px;display:none"></div>
+    <div class="lockbox ok" style="margin-top:8px">Protection: Staff/Teacher may edit assigned marks while OPEN. Finalized marks are read-only; only Admin can unlock. Marks entry for a subject is disabled until that subject's Attendance is Submitted &amp; Locked, and any student recorded ABSENT there is auto-locked out of marks entry.</div>
   </div>
 
   <div class="panel">
@@ -640,6 +644,8 @@ let attendanceOwnerUid=null;
 let marksLocked=false;
 let marksOwnerUid=null;
 let resultLocked=false;
+let marksAttendanceStatus="none"; /* "none" | "unlocked" | "locked" — attendance gate for the selected marks subject */
+let marksAbsentKeys=new Set();     /* keys of students marked ABSENT in the locked attendance for the selected subject */
 
 function roleIs(...roles){ return roles.includes(String(currentRole||"").toLowerCase()); }
 function isAdmin(){ return roleIs("admin"); }
@@ -1140,28 +1146,129 @@ function printAttendance(){
   printElement("attendanceBody",`ATTENDANCE RECORD – XI-2026 ANNUAL EXAMINATION | ${subject} | ${date}`);
 }
 
+/* Subject-wise blank Attendance / Signature sheet: printed and taken into the exam room
+   for students to physically sign against their name. Repeats the full header (school,
+   exam, subject, date) and the invigilator's signature line on EVERY printed page. */
+function printSignatureSheet(){
+  const subject=document.getElementById("attSubject").value;
+  if(!subject){ alert("Select the exam subject first."); return; }
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  if(!checkSubjectColumn(subject)) return;
+  setExamDateFromSubject();
+  const date=document.getElementById("attDate").value;
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); return; }
+
+  const rowsHtml=eligible.map((s,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(getStudentReg(s))}</td>
+      <td>${escapeHtml(getStudentName(s))}</td>
+      <td>${escapeHtml(getStudentSex(s))}</td>
+      <td class="sigcell"></td>
+    </tr>`).join("");
+
+  openPrintWindow({
+    docTitle:`Signature Sheet - ${subject} - ${date}`,
+    headerLines:[
+      `<div class="school">Taldangra Fulmati High School</div>`,
+      `<div class="exam">XI-2026 Annual Examination — Attendance / Signature Sheet</div>`,
+      `<div class="meta"><span><b>Subject:</b> ${escapeHtml(subject)}</span><span><b>Date:</b> ${escapeHtml(date)}</span><span><b>Class:</b> XI</span></div>`
+    ],
+    columns:["SL","Registration No.","Name","Sex","Signature of Student"],
+    rowsHtml,
+    footerLines:[
+      `<div class="sigline"><span>Invigilator's Signature: ______________________</span><span>Date: ______________</span></div>`
+    ]
+  });
+}
+
 /* MARKS */
+/* Finds the attendance record that gates marks entry for a subject: the same
+   subject/date attendance sheet used in the Attendance tab. Returns
+   {status:"none"|"unlocked"|"locked", absentKeys:Set} */
+async function getAttendanceGate(subject){
+  const date=EXAM_SCHEDULE[subject]||"";
+  if(!date) return {status:"locked",absentKeys:new Set()}; /* no schedule entry — nothing to gate against */
+  const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
+  try{
+    const snap=await db.collection("xiAttendance").doc(id).get();
+    if(!snap.exists) return {status:"none",absentKeys:new Set()};
+    const d=snap.data();
+    const absentKeys=new Set();
+    if(d.locked){
+      (d.rows||[]).forEach(r=>{
+        if(r.status==="A"){
+          const k=String(getStudentReg(r.student)||getStudentRoll(r.student)||getStudentName(r.student)||"").trim();
+          if(k) absentKeys.add(k);
+        }
+      });
+    }
+    return {status:d.locked?"locked":"unlocked",absentKeys};
+  }catch(e){
+    console.warn("Attendance gate check failed:",e);
+    return {status:"none",absentKeys:new Set()};
+  }
+}
+function studentKey(student){
+  return String(getStudentReg(student)||getStudentRoll(student)||getStudentName(student)||"").trim();
+}
 async function loadMarks(){
   const subject=document.getElementById("marksSubject").value; const exam=document.getElementById("marksExam").value;
   marksLocked=false;
+  marksAttendanceStatus="none"; marksAbsentKeys=new Set();
   if(!subject){ marksRows=[]; renderMarks(); updateScheme(); updateMarksLockUI(); return; }
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
   if(!checkSubjectColumn(subject)) return;
+
+  const gate=await getAttendanceGate(subject);
+  marksAttendanceStatus=gate.status; marksAbsentKeys=gate.absentKeys;
+
+  if(marksAttendanceStatus!=="locked"){
+    /* Accidental staff loading after not-yet-finalized attendance: no marks entry possible. */
+    marksRows=[];
+    renderMarks(); updateScheme(); updateMarksLockUI();
+    return;
+  }
+
   const eligible=students.filter(s=>studentTakesSubject(s,subject));
   try{ const snap=await db.collection("xiMarks").doc(`${exam}_${subject}`).get(); if(snap.exists){marksLocked=!!snap.data().locked; marksOwnerUid=snap.data().ownerUid||snap.data().updatedBy||null; marksRows=(snap.data().rows||[]).map((r,i)=>({sl:i+1,student:r.student,theory:r.theory??"",component:r.component??""}));} else {marksOwnerUid=null; marksRows=eligible.map((s,i)=>({sl:i+1,student:s,theory:"",component:""}));} }catch(e){alert("Could not load marks: "+e.message);return;}
   renderMarks(); updateScheme(); updateMarksLockUI();
 }
 function updateMarksLockUI(){
-  ["saveMarksBtn","lockMarksBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=marksLocked||!canMarks();});
-  const b=document.getElementById("schemeBox"); if(b && marksLocked) b.innerHTML+='<div class="lockbox">🔒 MARKS LOCKED — only Admin can unlock.</div>';
+  const attNotReady=marksAttendanceStatus!=="locked";
+  ["saveMarksBtn","lockMarksBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=marksLocked||!canMarks()||attNotReady;});
+  const msg=document.getElementById("marksAttendanceMsg");
+  if(!msg) return;
+  const subject=document.getElementById("marksSubject").value;
+  if(!subject){ msg.style.display="none"; return; }
+  msg.style.display="block";
+  if(marksAttendanceStatus==="none"){
+    msg.className="lockbox";
+    msg.textContent="⛔ Attendance not yet finalized for this subject — Marks entry is disabled. Ask the invigilator/staff to record and Submit & Lock the attendance first.";
+  }else if(marksAttendanceStatus==="unlocked"){
+    msg.className="lockbox";
+    msg.textContent="⛔ Attendance for this subject has been saved as a draft but is not yet Submitted & Locked — Marks entry stays disabled until it is finalized.";
+  }else if(marksLocked){
+    msg.className="lockbox";
+    msg.textContent="🔒 MARKS LOCKED — only Admin can unlock.";
+  }else{
+    msg.className="lockbox ok";
+    msg.textContent="🔓 Attendance finalized — Marks entry OPEN. Students recorded ABSENT in the locked attendance are automatically locked out below.";
+  }
 }
 async function lockMarks(){
-  if(!requireMarks()||marksLocked)return; if(!marksRows.length){alert("Load marks first.");return;}
+  if(!requireMarks()||marksLocked)return;
+  if(marksAttendanceStatus!=="locked"){alert("Attendance is not yet finalized for this subject. Finalize Attendance before locking marks.");return;}
+  if(!marksRows.length){alert("Load marks first.");return;}
   if(!confirm("Finalize and LOCK these marks?"))return;
   const exam=document.getElementById("marksExam").value,subject=document.getElementById("marksSubject").value;
   if(!requireAssigned("assignedSubjects",subject,"subject")) return;
   if(!canEditUnlocked(marksOwnerUid)){alert("These marks are assigned to another staff member. Only Admin can finalize/change them.");return;}
-  try{await db.collection("xiMarks").doc(`${exam}_${subject}`).set({exam,subject,rows:marksRows.map(r=>({student:r.student,theory:r.theory,component:r.component})),ownerUid:marksOwnerUid||currentUser?.uid||null,updatedBy:currentUser?.uid||null,locked:true,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});marksLocked=true;updateMarksLockUI();alert("Marks finalized and locked.");}catch(e){alert("Lock failed: "+e.message);}
+  try{await db.collection("xiMarks").doc(`${exam}_${subject}`).set({exam,subject,rows:marksRows.map(r=>{
+      const absent=marksAbsentKeys.has(studentKey(r.student));
+      return {student:r.student,theory:absent?"":r.theory,component:absent?"":r.component};
+    }),ownerUid:marksOwnerUid||currentUser?.uid||null,updatedBy:currentUser?.uid||null,locked:true,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});marksLocked=true;updateMarksLockUI();alert("Marks finalized and locked.");}catch(e){alert("Lock failed: "+e.message);}
 }
 async function unlockMarks(){
   if(!requireAdmin())return; const exam=document.getElementById("marksExam").value,subject=document.getElementById("marksSubject").value;if(!subject)return;
@@ -1170,6 +1277,14 @@ async function unlockMarks(){
 function renderMarks(){
   const body=document.getElementById("marksBody");
   const q=(document.getElementById("marksSearch").value||"").toLowerCase();
+
+  if(marksAttendanceStatus!=="locked"){
+    const reason=marksAttendanceStatus==="none"
+      ? "Attendance not yet finalized for this subject."
+      : "Attendance saved but not yet Submitted &amp; Locked.";
+    body.innerHTML=`<tr><td colspan="7">${reason} Marks entry will open once Attendance is Submitted &amp; Locked.</td></tr>`;
+    return;
+  }
 
   const rows=marksRows.filter(r=>
     Object.values(r.student).join(" ").toLowerCase().includes(q)
@@ -1181,6 +1296,20 @@ function renderMarks(){
     const idx=marksRows.indexOf(r);
     const scheme=SCHEMES[document.getElementById("marksSubject").value];
     const compMax=scheme.practical||scheme.project;
+    const isAbsent=marksAbsentKeys.has(studentKey(r.student));
+
+    if(isAbsent){
+      return `
+        <tr style="background:#fef2f2">
+          <td>${r.sl}</td>
+          <td>${escapeHtml(getStudentRoll(r.student))}</td>
+          <td>${escapeHtml(findStudentValue(r.student,["name","Name","NAME","Student Name"]))}</td>
+          <td colspan="2" style="text-align:center"><span class="badge absent">ABSENT — MARKS LOCKED</span></td>
+          <td>—</td>
+          <td></td>
+        </tr>
+      `;
+    }
 
     const theory=Number(r.theory)||0;
     const component=semI ? 0 : (Number(r.component)||0);
@@ -1219,8 +1348,11 @@ function renderMarks(){
 
 function setMark(i,key,value){
   if(!requireMarks()) return;
+  if(marksAttendanceStatus!=="locked"){alert("Attendance is not yet finalized for this subject. Marks entry is disabled.");renderMarks();return;}
   if(marksLocked){alert("Marks are locked. Only Admin can unlock.");renderMarks();return;}
   if(!canEditUnlocked(marksOwnerUid)){alert("These marks are assigned to another staff member. Only Admin can change them.");return;}
+  const r=marksRows[i];
+  if(marksAbsentKeys.has(studentKey(r.student))){alert("This student was recorded ABSENT in the locked attendance. Marks entry is locked for this student.");renderMarks();return;}
   marksRows[i][key]=value;
   renderMarks();
 }
@@ -1232,6 +1364,10 @@ async function saveMarks(){
 
   if(!subject){
     alert("Select a subject.");
+    return;
+  }
+  if(marksAttendanceStatus!=="locked"){
+    alert("Attendance is not yet finalized for this subject. Marks entry is disabled until Attendance is Submitted & Locked.");
     return;
   }
   if(!requireAssigned("assignedSubjects",subject,"subject")) return;
@@ -1248,11 +1384,14 @@ async function saveMarks(){
     await db.collection("xiMarks").doc(id).set({
       exam,
       subject,
-      rows:marksRows.map(r=>({
-        student:r.student,
-        theory:r.theory,
-        component:r.component
-      })),
+      rows:marksRows.map(r=>{
+        const absent=marksAbsentKeys.has(studentKey(r.student));
+        return {
+          student:r.student,
+          theory:absent?"":r.theory,
+          component:absent?"":r.component
+        };
+      }),
       ownerUid:marksOwnerUid||currentUser?.uid||null,
       updatedBy:currentUser?.uid||null,
       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
@@ -1267,6 +1406,105 @@ async function saveMarks(){
 
 function printMarks(){
   printElement("marksBody","Marks Entry");
+}
+
+/* Subject/exam-wise blank Marks Entry sheet: the paper sheet the examiner fills in by hand
+   (Theory / Practical-Project columns left blank) before the marks are keyed into the portal.
+   A4 portrait, with the full header and an examiner + invigilator signature line repeated
+   on EVERY printed page. */
+function printMarksEntrySheet(){
+  const subject=document.getElementById("marksSubject").value;
+  const exam=document.getElementById("marksExam").value;
+  if(!subject){ alert("Select a subject first."); return; }
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  if(!checkSubjectColumn(subject)) return;
+  const scheme=SCHEMES[subject];
+  if(!scheme){ alert("No marks scheme found for this subject."); return; }
+  const eligible=students.filter(s=>studentTakesSubject(s,subject));
+  if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); return; }
+
+  const examLabel=exam==="SEM1"?"Semester I":exam==="SUPP"?"Semester I Supplementary":"Semester II";
+  const compLabel=scheme.practical?"Practical":"Project";
+  const compMax=scheme.practical||scheme.project;
+  const semI=(exam==="SEM1"||exam==="SUPP");
+  const date=EXAM_SCHEDULE[subject]||"";
+
+  const rowsHtml=eligible.map((s,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${escapeHtml(getStudentRoll(s))}</td>
+      <td>${escapeHtml(getStudentName(s))}</td>
+      <td class="sigcell"></td>
+      <td class="sigcell">${semI?"N/A":""}</td>
+      <td></td>
+    </tr>`).join("");
+
+  openPrintWindow({
+    docTitle:`Marks Entry Sheet - ${subject} - ${examLabel}`,
+    headerLines:[
+      `<div class="school">Taldangra Fulmati High School</div>`,
+      `<div class="exam">XI-2026 Annual Examination — Marks Entry Sheet</div>`,
+      `<div class="meta"><span><b>Subject:</b> ${escapeHtml(subject)}</span><span><b>Examination:</b> ${examLabel}</span><span><b>Date:</b> ${escapeHtml(date)}</span><span><b>Class:</b> XI</span></div>`
+    ],
+    columns:["SL","Roll","Name",`Theory (Max ${scheme.theory})`,`${compLabel} (Max ${compMax})`,"Total"],
+    rowsHtml,
+    footerLines:[
+      `<div class="sigline"><span>Examiner's Signature: ______________________</span><span>Invigilator's Signature: ______________________</span></div>`
+    ]
+  });
+}
+
+/* Shared A4-portrait print builder used by the signature sheet and marks entry sheet.
+   Uses native <thead>/<tfoot> table semantics so the school/exam/subject/date header
+   and the signature footer repeat automatically on EVERY printed page, however many
+   students the list runs to. */
+function openPrintWindow({docTitle,headerLines,columns,rowsHtml,footerLines,orientation}){
+  const w=window.open("","_blank");
+  if(!w){ alert("Please allow pop-ups to print this sheet."); return; }
+  const headerHtml=headerLines.join("");
+  const footerHtml=footerLines.join("");
+  const colCount=columns.length;
+  w.document.write(`
+    <html>
+    <head>
+      <title>${docTitle}</title>
+      <style>
+        @page{ size:A4 ${orientation||"portrait"}; margin:14mm 12mm; }
+        *{box-sizing:border-box}
+        body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;padding:0}
+        table{width:100%;border-collapse:collapse}
+        thead{display:table-header-group}
+        tfoot{display:table-footer-group}
+        th,td{border:1px solid #333;padding:6px 8px;font-size:12px;text-align:left;vertical-align:middle}
+        th{background:#eee;text-align:center}
+        .doc-header{border:0;text-align:center;padding:4px 0 10px}
+        .doc-header .school{font-size:17px;font-weight:800}
+        .doc-header .exam{font-size:13px;font-weight:700;margin-top:2px}
+        .doc-header .meta{font-size:12px;margin-top:6px;display:flex;justify-content:center;gap:22px;flex-wrap:wrap}
+        .doc-footer{border:0;padding-top:0}
+        .doc-footer .sigline{display:flex;justify-content:space-between;padding-top:30px;font-size:12px;font-weight:600}
+        .sigcell{min-width:110px;height:32px}
+      </style>
+    </head>
+    <body>
+      <table>
+        <thead>
+          <tr><td class="doc-header" colspan="${colCount}">${headerHtml}</td></tr>
+          <tr>${columns.map(c=>`<th>${c}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+        <tfoot>
+          <tr><td class="doc-footer" colspan="${colCount}">${footerHtml}</td></tr>
+        </tfoot>
+      </table>
+    </body>
+    </html>
+  `);
+  w.document.close();
+  w.focus();
+  w.print();
 }
 
 /* COMBINED RESULT (FM-100): Sem I Theory + Sem II Theory + Project/Practical */
