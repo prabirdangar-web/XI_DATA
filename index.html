@@ -421,7 +421,7 @@ tr:hover td{background:#f8fafc}
 
       <div class="field" style="flex:1">
         <label>Search</label>
-        <input id="marksSearch" placeholder="Student name / roll" oninput="renderMarks()">
+        <input id="marksSearch" placeholder="Student name / Registration No." oninput="renderMarks()">
       </div>
 
       <button class="btn" onclick="loadMarks()">Load</button>
@@ -443,7 +443,7 @@ tr:hover td{background:#f8fafc}
         <thead>
           <tr>
             <th>SL</th>
-            <th>Roll</th>
+            <th>Registration No.</th>
             <th>Name</th>
             <th>Theory</th>
             <th id="compHeader">Practical / Project</th>
@@ -1305,7 +1305,7 @@ function renderMarks(){
       return `
         <tr style="background:#fef2f2">
           <td>${r.sl}</td>
-          <td>${escapeHtml(getStudentRoll(r.student))}</td>
+          <td>${escapeHtml(getStudentReg(r.student))}</td>
           <td>${escapeHtml(findStudentValue(r.student,["name","Name","NAME","Student Name"]))}</td>
           <td colspan="2" style="text-align:center"><span class="badge absent">ABSENT — MARKS LOCKED</span></td>
           <td>—</td>
@@ -1327,7 +1327,7 @@ function renderMarks(){
     return `
       <tr>
         <td>${r.sl}</td>
-        <td>${escapeHtml(getStudentRoll(r.student))}</td>
+        <td>${escapeHtml(getStudentReg(r.student))}</td>
         <td>${escapeHtml(findStudentValue(r.student,["name","Name","NAME","Student Name"]))}</td>
         <td>
           <input class="markinput" type="number" min="0"
@@ -1435,7 +1435,7 @@ function printMarksEntrySheet(){
   const rowsHtml=eligible.map((s,i)=>`
     <tr>
       <td>${i+1}</td>
-      <td>${escapeHtml(getStudentRoll(s))}</td>
+      <td>${escapeHtml(getStudentReg(s))}</td>
       <td>${escapeHtml(getStudentName(s))}</td>
       <td class="sigcell"></td>
       <td class="sigcell">${semI?"N/A":""}</td>
@@ -1449,7 +1449,7 @@ function printMarksEntrySheet(){
       `<div class="exam">XI-2026 Annual Examination — Marks Entry Sheet</div>`,
       `<div class="meta"><span><b>Subject:</b> ${escapeHtml(subject)}</span><span><b>Examination:</b> ${examLabel}</span><span><b>Date:</b> ${escapeHtml(date)}</span><span><b>Class:</b> XI</span></div>`
     ],
-    columns:["SL","Roll","Name",`Theory (Max ${scheme.theory})`,`${compLabel} (Max ${compMax})`,"Total"],
+    columns:["SL","Registration No.","Name",`Theory (Max ${scheme.theory})`,`${compLabel} (Max ${compMax})`,"Total"],
     rowsHtml,
     footerLines:[
       `<div class="sigline"><span>Examiner's Signature: ______________________</span><span>Invigilator's Signature: ______________________</span></div>`
