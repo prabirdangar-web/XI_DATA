@@ -132,6 +132,7 @@ tr:hover td{background:#f8fafc}
 .attendance-buttons{
   display:flex;gap:6px;flex-wrap:wrap
 }
+.attendance-buttons button:disabled,.btn:disabled{opacity:.45;cursor:not-allowed}
 .attendance-buttons button{
   border:0;padding:6px 9px;border-radius:6px;
   font-size:11px;font-weight:700
@@ -377,7 +378,7 @@ tr:hover td{background:#f8fafc}
     </div>
   </div>
 
-  <div id="attendanceLockBox" class="lockbox">Select a subject to check attendance lock status.</div><div class="lockbox ok" style="margin-top:8px">Protection: Invigilator/Staff may enter attendance only while OPEN. After Submit &amp; Lock, only Admin can unlock or correct it.</div>
+  <div id="attendanceLockBox" class="lockbox">Select a subject to check attendance lock status.</div><div class="lockbox ok" style="margin-top:8px">Any Admin/Staff/Teacher/Invigilator can enter attendance while it is OPEN. After Submit &amp; Lock, the sheet is read-only for everyone except Admin, who alone can unlock it.</div>
 
   <div class="panel">
     <div class="tablewrap">
@@ -1058,7 +1059,6 @@ async function generateAttendance(){
   if(!students.length){ alert("Please import/load XI-REG students first."); return; }
   const subject=document.getElementById("attSubject").value;
   if(!subject){ alert("Select the exam subject first."); return; }
-  if(!requireAssigned("assignedAttendanceSubjects",subject,"subject")) return;
   if(!checkSubjectColumn(subject)) return;
   setExamDateFromSubject();
   const date=document.getElementById("attDate").value;
@@ -1076,9 +1076,31 @@ async function generateAttendance(){
       });
     }else{ attendanceLocked=false; attendanceOwnerUid=null; attendanceRows=eligible.map((s,i)=>({sl:i+1,student:s,status:"P"})); }
     if(!eligible.length){ alert(`No students found with "${subject}" in the imported XI-REG sheet.`); }
-    renderAttendance(); updateAttendanceLockUI();
+    renderAttendance(); updateAttendanceLockUI(); watchAttendanceLock(id);
   }catch(e){ alert("Could not load attendance: "+e.message); }
 }
+/* Live lock watcher: if anyone locks/unlocks this sheet, every open screen updates at once */
+let attendanceUnsub=null;
+function watchAttendanceLock(id){
+  if(attendanceUnsub){ attendanceUnsub(); attendanceUnsub=null; }
+  attendanceUnsub=db.collection("xiAttendance").doc(id).onSnapshot(snap=>{
+    if(!snap.exists) return;
+    const d=snap.data();
+    const wasLocked=attendanceLocked;
+    attendanceLocked=!!d.locked; attendanceLockInfo=d.locked?(d.lockedByName||""):"";
+    if(attendanceLocked && !wasLocked){
+      /* locked by someone else: show the final saved statuses, drop any unsaved local edits */
+      const saved=d.rows||[];
+      attendanceRows.forEach(r=>{
+        const key=String(getStudentReg(r.student)||getStudentRoll(r.student)||getStudentName(r.student)||"").trim();
+        const old=saved.find(x=>String(getStudentReg(x.student)||getStudentRoll(x.student)||getStudentName(x.student)||"").trim()===key);
+        if(old) r.status=old.status;
+      });
+    }
+    renderAttendance(); updateAttendanceLockUI();
+  },e=>console.warn("Attendance lock watcher:",e));
+}
+let attendanceLockInfo="";
 function renderAttendance(){
   const body=document.getElementById("attendanceBody");
   const q=(document.getElementById("attendanceSearch").value||"").toLowerCase().trim();
@@ -1091,53 +1113,72 @@ function renderAttendance(){
   });
   body.innerHTML=rows.length ? rows.map(r=>{
     const idx=attendanceRows.indexOf(r);
-    return `<tr><td>${r.sl}</td><td>${escapeHtml(getStudentReg(r.student))}</td><td>${escapeHtml(getStudentName(r.student))}</td><td>${escapeHtml(getStudentSex(r.student))}</td><td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td><td><div class="attendance-buttons"><button class="pbtn" onclick="setAttendance(${idx},'P')">P</button><button class="abtn" onclick="setAttendance(${idx},'A')">A</button></div></td></tr>`;
+    return `<tr><td>${r.sl}</td><td>${escapeHtml(getStudentReg(r.student))}</td><td>${escapeHtml(getStudentName(r.student))}</td><td>${escapeHtml(getStudentSex(r.student))}</td><td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td><td><div class="attendance-buttons"><button class="pbtn" ${attendanceLocked||!canAttendance()?"disabled":""} onclick="setAttendance(${idx},'P')">P</button><button class="abtn" ${attendanceLocked||!canAttendance()?"disabled":""} onclick="setAttendance(${idx},'A')">A</button></div></td></tr>`;
   }).join("") : "<tr><td colspan='6'>No students match the selected filter.</td></tr>";
 }
 function setAttendance(i,status){
   if(!requireAttendance())return;
   if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;}
-  if(!canEditUnlocked(attendanceOwnerUid)){alert('This attendance record is assigned to another staff member. Only Admin can change it.');return;}
   attendanceRows[i].status=status; renderAttendance();
 }
 function markAllAttendance(status){
   if(!requireAttendance())return;
   if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;}
-  if(!canEditUnlocked(attendanceOwnerUid)){alert('This attendance record is assigned to another staff member. Only Admin can change it.');return;}
   attendanceRows.forEach(r=>r.status=status); renderAttendance();
 }
+function attendancePayload(subject,date){
+  return {examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),updatedBy:currentUser?.uid||null,updatedByName:currentUser?.email||"",updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+}
+/* Save/Lock run inside a transaction that re-reads the sheet from the server,
+   so a sheet locked by anyone else a moment ago can never be overwritten. */
 async function saveAttendance(){
   if(!requireAttendance()||attendanceLocked) return;
-  const subject=document.getElementById("attSubject").value; const date=document.getElementById("attDate").value;
-  if(!subject||!date){ alert("Select the exam subject."); return; }
-  if(!requireAssigned("assignedAttendanceSubjects",subject,"subject")) return;
+  const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value;
   if(!attendanceRows.length){ alert("Generate the attendance sheet first."); return; }
-  if(!canEditUnlocked(attendanceOwnerUid)){alert("This attendance record belongs to another staff member. Only Admin can change it.");return;}
-  const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
+  const id=`${subject}_${date}`.replace(/[\/\s]/g,"_"), ref=db.collection("xiAttendance").doc(id);
   try{
-    await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),locked:false,ownerUid:attendanceOwnerUid||currentUser?.uid||null,updatedBy:currentUser?.uid||null,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-    attendanceOwnerUid=attendanceOwnerUid||currentUser?.uid||null;
+    const ok=await db.runTransaction(async tx=>{
+      const snap=await tx.get(ref);
+      if(snap.exists && snap.data().locked) return false;
+      const data=attendancePayload(subject,date);
+      if(!snap.exists){ data.locked=false; data.ownerUid=currentUser?.uid||null; }
+      tx.set(ref,data,{merge:true});
+      return true;
+    });
+    if(!ok){ attendanceLocked=true; updateAttendanceLockUI(); renderAttendance(); alert("This attendance was already Submitted & Locked by another user. Your changes were NOT saved. Only Admin can unlock."); return; }
     alert(`Attendance draft saved: ${subject} — ${date}`); updateDashboard();
   }catch(e){ alert("Attendance save failed: "+e.message); }
 }
 async function lockAttendance(){
   if(!requireAttendance()||attendanceLocked) return;
   if(!attendanceRows.length){alert("Generate the attendance sheet first.");return;}
-  if(!confirm("Submit and LOCK this attendance? Staff/Invigilator will not be able to edit it afterwards."))return;
+  if(!confirm("Submit and LOCK this attendance for the day? After this only Admin can unlock or change it."))return;
   const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value;
-  if(!requireAssigned("assignedAttendanceSubjects",subject,"subject")) return;
-  if(!canEditUnlocked(attendanceOwnerUid)){alert("This attendance record belongs to another staff member. Only Admin can lock/change it.");return;}
-  const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
-  try{ await db.collection("xiAttendance").doc(id).set({examType:"XI-2026 Annual Examination",subject,date,rows:attendanceRows.map(r=>({student:r.student,status:r.status})),locked:true,ownerUid:attendanceOwnerUid||currentUser?.uid||null,lockedBy:currentUser?.uid||null,lockedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); attendanceLocked=true; updateAttendanceLockUI(); alert("Attendance submitted and locked."); }catch(e){alert("Lock failed: "+e.message);}
+  const id=`${subject}_${date}`.replace(/[\/\s]/g,"_"), ref=db.collection("xiAttendance").doc(id);
+  try{
+    const ok=await db.runTransaction(async tx=>{
+      const snap=await tx.get(ref);
+      if(snap.exists && snap.data().locked) return false;
+      const data=attendancePayload(subject,date);
+      data.locked=true; data.lockedBy=currentUser?.uid||null; data.lockedByName=currentUser?.email||"";
+      data.lockedAt=firebase.firestore.FieldValue.serverTimestamp();
+      if(!snap.exists) data.ownerUid=currentUser?.uid||null;
+      tx.set(ref,data,{merge:true});
+      return true;
+    });
+    if(!ok){ attendanceLocked=true; updateAttendanceLockUI(); renderAttendance(); alert("Already locked by another user. Only Admin can unlock."); return; }
+    attendanceLocked=true; attendanceLockInfo=currentUser?.email||""; updateAttendanceLockUI(); renderAttendance(); alert("Attendance submitted and locked.");
+  }catch(e){alert("Lock failed: "+e.message);}
 }
 async function unlockAttendance(){
   if(!requireAdmin())return;
   const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value; if(!subject||!date)return;
   const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
-  try{await db.collection("xiAttendance").doc(id).set({locked:false,unlockedBy:currentUser.uid,unlockedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});attendanceLocked=false;updateAttendanceLockUI();renderAttendance();alert("Attendance unlocked by Admin.");}catch(e){alert("Unlock failed: "+e.message);}
+  try{await db.collection("xiAttendance").doc(id).set({locked:false,unlockedBy:currentUser.uid,unlockedByName:currentUser.email||"",unlockedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});attendanceLocked=false;updateAttendanceLockUI();renderAttendance();alert("Attendance unlocked by Admin. All staff can edit again until it is re-locked.");}catch(e){alert("Unlock failed: "+e.message);}
 }
 function updateAttendanceLockUI(){
-  const box=document.getElementById("attendanceLockBox"); if(box) {box.className="lockbox "+(attendanceLocked?"":"ok"); box.textContent=attendanceLocked?"🔒 ATTENDANCE LOCKED — Edit/mark buttons disabled. Admin unlock required.":"🔓 ATTENDANCE OPEN — Invigilator/Staff may enter attendance.";}
+  const box=document.getElementById("attendanceLockBox"); if(box) {box.className="lockbox "+(attendanceLocked?"":"ok"); box.textContent=attendanceLocked?("🔒 ATTENDANCE LOCKED"+(attendanceLockInfo?" by "+attendanceLockInfo:"")+" — read-only. Only Admin can unlock."):"🔓 ATTENDANCE OPEN — Admin, Staff, Teacher and Invigilator can all enter/edit until it is Submitted & Locked.";}
+  document.querySelectorAll('[onclick^="markAllAttendance"]').forEach(el=>el.disabled=attendanceLocked||!canAttendance());
   ["saveAttendanceBtn","lockAttendanceBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=attendanceLocked||!canAttendance();});
 }
 function printAttendance(){
