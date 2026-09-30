@@ -241,6 +241,7 @@ tr:hover td{background:#f8fafc}
     <button data-mpview="mp_marks" onclick="MP.showView('mp_marks',this)">📝 Marks Entry</button>
     <button data-mpview="mp_result" onclick="MP.showView('mp_result',this)">🏆 Result</button>
     <button data-mpview="mp_analysis" onclick="MP.showView('mp_analysis',this)">📊 Analysis</button>
+    <button data-mpview="mp_programme" style="display:none" onclick="MP.showView('mp_programme',this)">⚙️ Programme (Admin)</button>
   </div>
 
   <div class="userbox">
@@ -651,6 +652,16 @@ tr:hover td{background:#f8fafc}
   <div class="panel">
     <div class="toolbar"><div class="field" style="flex:1"><label>Search</label><input id="mp_studentSearch" placeholder="B.S. Portal ID / Roll / Name" oninput="MP.renderStudents()"></div></div>
     <div class="tablewrap"><table><thead id="mp_studentHead"></thead><tbody id="mp_studentBody"></tbody></table></div>
+  </div>
+</section>
+
+<section id="mp_programme" class="view">
+  <div class="title">Class X Programme</div>
+  <div class="subtitle">Admin only — add, edit or delete subjects and exam dates. Saved directly to Firebase.</div>
+  <div class="panel">
+    <button class="btn" onclick="MP.editProgramme()">➕ Add Subject</button>
+    <div class="tablewrap"><table><thead><tr><th>Code</th><th>Subject</th><th>Exam Date</th><th>Action</th></tr></thead>
+    <tbody id="mp_programmeBody"></tbody></table></div>
   </div>
 </section>
 
@@ -2091,7 +2102,7 @@ function printElement(bodyId,title){
 /* ============ CLASS X — MP (SE) 2027 module (namespaced: window.MP) ============ */
 (function(){
 
-const PROGRAMME={
+let PROGRAMME={
   BNGA:{name:"BENGALI",date:"20-11-2026"},
   SANT:{name:"SANTHALI",date:"20-11-2026"},
   ENGB:{name:"ENGLISH",date:"21-11-2026"},
@@ -2101,7 +2112,7 @@ const PROGRAMME={
   PHYS:{name:"PHYSICAL SCIENCE",date:"27-11-2026"},
   BIOS:{name:"LIFE SCIENCE",date:"28-11-2026"}
 };
-const SUBJECTS=Object.keys(PROGRAMME);
+let SUBJECTS=Object.keys(PROGRAMME);
 const PASS_MARK=30; // Change this value if your school uses a different pass mark out of 100.
 const currentExam="MP-SE-2027";
 
@@ -2127,7 +2138,54 @@ function firstLang(s){const v=normKey(val(s,["1st Language","First Language","1s
 function takesSubject(s,sub){return (sub==="BNGA"||sub==="SANT")?firstLang(s)===sub:true}
 function setLang(i,v){if(!requireAdmin()){renderStudents();return}students[i]["1st Language"]=(v==="SANT"?"SANT":"BNGA");renderStudents()}
 
+/* ---------- PROGRAMME (admin) - same as Class XI "Subjects & Exam Schedule" ---------- */
+function dmy(d){const m=/^(\d{2})-(\d{2})-(\d{4})$/.exec(d||"");return m?m[3]+m[2]+m[1]:"99999999"}
+function sortProgramme(){const o={};Object.keys(PROGRAMME).sort((a,b)=>dmy(PROGRAMME[a].date).localeCompare(dmy(PROGRAMME[b].date))).forEach(k=>o[k]=PROGRAMME[k]);PROGRAMME=o;SUBJECTS=Object.keys(PROGRAMME)}
+async function loadProgramme(){
+  try{
+    const c=await db.collection("mpStudents").doc("mpConfig").get();
+    if(c.exists&&c.data().programme&&Object.keys(c.data().programme).length){PROGRAMME=c.data().programme;sortProgramme();populateSubjects();updateDashboard()}
+  }catch(e){console.warn("Programme load:",e)}
+  renderProgramme();
+}
+async function persistProgramme(){
+  sortProgramme();
+  await db.collection("mpStudents").doc("mpConfig").set({programme:PROGRAMME,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  populateSubjects();renderProgramme();updateDashboard();
+}
+function renderProgramme(){
+  const b=document.getElementById("mp_programmeBody");if(!b)return;
+  b.innerHTML=SUBJECTS.map(c=>`<tr><td><b>${escapeHtml(c)}</b></td><td>${escapeHtml(PROGRAMME[c].name)}</td><td>${escapeHtml(PROGRAMME[c].date)}</td><td style="white-space:nowrap"><button class="btn light" onclick="MP.editProgramme('${c}')">✏️ Edit</button> <button class="btn danger" onclick="MP.deleteProgramme('${c}')">🗑</button></td></tr>`).join("")||"<tr><td colspan='4'>No subjects.</td></tr>";
+}
+function editProgramme(code){
+  if(!requireAdmin())return;
+  const x=code?PROGRAMME[code]:{name:"",date:""};
+  showModal(code?"Edit Subject "+code:"Add Subject",[
+    {label:"Subject Code (e.g. BNGA)",val:code||"",ro:!!code},
+    {label:"Subject Name",val:x.name},
+    {label:"Exam Date (DD-MM-YYYY)",val:x.date}
+  ],async v=>{
+    const c=(code||v[0]).toUpperCase().replace(/\s/g,"");
+    if(!/^[A-Z0-9]{2,10}$/.test(c)){alert("Enter a valid subject code (letters/numbers).");return false}
+    if(!code&&PROGRAMME[c]){alert("Subject already exists — use Edit.");return false}
+    if(!v[1]){alert("Enter the subject name.");return false}
+    if(!/^\d{2}-\d{2}-\d{4}$/.test(v[2])){alert("Date must be DD-MM-YYYY.");return false}
+    const bk=JSON.stringify(PROGRAMME);
+    PROGRAMME[c]={name:v[1].toUpperCase(),date:v[2]};
+    try{await persistProgramme()}catch(e){PROGRAMME=JSON.parse(bk);SUBJECTS=Object.keys(PROGRAMME);alert("Save failed: "+e.message);return false}
+  });
+}
+async function deleteProgramme(c){
+  if(!requireAdmin())return;
+  if(!confirm("Delete subject "+c+" from the Class X programme? Already-saved attendance/marks records stay in the database. Saved immediately."))return;
+  const bk=JSON.stringify(PROGRAMME);
+  delete PROGRAMME[c];SUBJECTS=Object.keys(PROGRAMME);
+  try{await persistProgramme()}catch(e){PROGRAMME=JSON.parse(bk);SUBJECTS=Object.keys(PROGRAMME);alert("Delete failed: "+e.message);renderProgramme()}
+}
+function setSex(i,v){if(!requireAdmin()){renderStudents();return}students[i]["Sex"]=v;renderStudents()}
+
 function showView(id,btn){
+  if(id==="mp_programme"&&!isAdmin()) return alert("Programme editing is restricted to Admin.");
   if(id==="mp_marks"&&!canMarks()) return alert("Marks Entry is restricted to Staff/Teacher/Admin.");
   if(id==="mp_result"&&!canResult()) return alert("Result is restricted to Staff/Teacher/Admin.");
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
@@ -2135,6 +2193,7 @@ function showView(id,btn){
   document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
   const b=btn||document.querySelector('.nav button[data-mpview="'+id+'"]'); if(b)b.classList.add("active");
   if(id==="mp_analysis") updateAnalysis();
+  if(id==="mp_programme") renderProgramme();
 }
 
 function populateSubjects(){
@@ -2150,7 +2209,7 @@ populateSubjects();
 function applyMpRoleUI(){
   const show=(id,ok)=>{const el=document.getElementById(id);if(el)el.style.display=ok?"inline-block":"none"};
   show("mp_saveStudentsBtn",isAdmin());show("mp_unlockAttendanceBtn",isAdmin());show("mp_unlockMarksBtn",isAdmin());
-  [["mp_marks",canMarks()],["mp_result",canResult()]].forEach(([v,ok])=>{
+  [["mp_marks",canMarks()],["mp_result",canResult()],["mp_programme",isAdmin()]].forEach(([v,ok])=>{
     const b=document.querySelector('.nav button[data-mpview="'+v+'"]');if(b)b.style.display=ok?"block":"none"});
   renderStudents();
 }
@@ -2158,6 +2217,7 @@ const _xiApplyRoleUI=applyRoleUI;
 applyRoleUI=function(){_xiApplyRoleUI();applyMpRoleUI();};
 applyMpRoleUI();
 auth.onAuthStateChanged(u=>{if(u&&!students.length)loadStudents()});
+auth.onAuthStateChanged(u=>{if(u)loadProgramme()});
 window.toggleNavGroup=function(g){
   document.getElementById("nav-"+g).classList.toggle("collapsed");
   document.getElementById("ngt-"+g).classList.toggle("collapsed");
@@ -2197,7 +2257,7 @@ function renderStudents(){
   document.getElementById("mp_studentHead").innerHTML="<tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>1st Language</th>"+(isAdmin()?"<th>Action</th>":"")+"</tr>";
   body.innerHTML=filtered.map((s,i)=>{
     const idx=students.indexOf(s);
-    return `<tr><td>${i+1}</td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(cls(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${escapeHtml(sex(s))}</td><td>${isAdmin()?`<select onchange="MP.setLang(${idx},this.value)"><option value="BNGA"${firstLang(s)==="BNGA"?" selected":""}>Bengali</option><option value="SANT"${firstLang(s)==="SANT"?" selected":""}>Santali</option></select>`:(firstLang(s)==="SANT"?"Santali":"Bengali")}</td>${isAdmin()?`<td><button class="btn danger" style="padding:6px 9px" onclick="MP.deleteStudent(${idx})">Delete</button></td>`:""}</tr>`;
+    return `<tr><td>${i+1}</td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(cls(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${isAdmin()?`<select onchange="MP.setSex(${idx},this.value)"><option value=""${/^(m|f)/i.test(sex(s))?"":" selected"}>—</option><option value="Male"${/^m/i.test(sex(s))?" selected":""}>Male</option><option value="Female"${/^f/i.test(sex(s))?" selected":""}>Female</option></select>`:escapeHtml(sex(s))}</td><td>${isAdmin()?`<select onchange="MP.setLang(${idx},this.value)"><option value="BNGA"${firstLang(s)==="BNGA"?" selected":""}>Bengali</option><option value="SANT"${firstLang(s)==="SANT"?" selected":""}>Santali</option></select>`:(firstLang(s)==="SANT"?"Santali":"Bengali")}</td>${isAdmin()?`<td><button class="btn danger" style="padding:6px 9px" onclick="MP.deleteStudent(${idx})">Delete</button></td>`:""}</tr>`;
   }).join("")||"<tr><td colspan='9'>No students loaded.</td></tr>";
 }
 function deleteStudent(i){if(!requireAdmin())return;if(confirm("Delete this student?")){students.splice(i,1);students.forEach((s,i)=>s.sl=i+1);renderStudents()}}
@@ -2384,7 +2444,7 @@ async function updateAnalysis(){
   }catch(e){document.getElementById("mp_analysisText").textContent=e.message}
 }
 
-window.MP={showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult};
+window.MP={showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult};
 })();
 </script>
 </body>
