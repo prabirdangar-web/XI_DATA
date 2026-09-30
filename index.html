@@ -646,7 +646,7 @@ tr:hover td{background:#f8fafc}
       <button class="btn secondary" onclick="MP.addStudent()">Add Student</button>
       <button class="btn secondary" onclick="MP.printStudents()">Print</button>
     </div>
-    <p style="font-size:12px;color:#64748b">Excel headings can be B.S. Portal ID, Class, Section, Roll, Name and Sex (common spelling variations are accepted).</p>
+    <p style="font-size:12px;color:#64748b">Excel headings can be B.S. Portal ID, Class, Section, Roll, Name, Sex and 1st Language (Bengali / Santali; blank = Bengali). Admin can also change 1st Language from the dropdown in the table below. Bengali students appear only in the Bengali paper and Santali students only in the Santali paper.</p>
   </div>
   <div class="panel">
     <div class="toolbar"><div class="field" style="flex:1"><label>Search</label><input id="mp_studentSearch" placeholder="B.S. Portal ID / Roll / Name" oninput="MP.renderStudents()"></div></div>
@@ -2122,6 +2122,10 @@ function roll(s){return val(s,["Roll","Roll No","Roll Number"])}
 function nameOf(s){return val(s,["Name","Student Name","Candidate Name"])}
 function sex(s){return val(s,["Sex","Gender"])}
 function keyOf(s){return normalize(reg(s)||roll(s)||nameOf(s))}
+/* 1st Language: Bengali (BNGA) or Santali (SANT) - a student takes only ONE of them. Blank = Bengali. */
+function firstLang(s){const v=normKey(val(s,["1st Language","First Language","1st Lang","Language","Medium","L1"]));return ["sant","santali","santhali"].includes(v)?"SANT":"BNGA"}
+function takesSubject(s,sub){return (sub==="BNGA"||sub==="SANT")?firstLang(s)===sub:true}
+function setLang(i,v){if(!requireAdmin()){renderStudents();return}students[i]["1st Language"]=(v==="SANT"?"SANT":"BNGA");renderStudents()}
 
 function showView(id,btn){
   if(id==="mp_marks"&&!canMarks()) return alert("Marks Entry is restricted to Staff/Teacher/Admin.");
@@ -2183,18 +2187,18 @@ function importExcel(){
 }
 function addStudent(){
   if(!requireAdmin())return;
-  students.push({sl:students.length+1,"B.S. Portal ID":"","Class":"X","Section":"A","Roll":"","Name":"","Sex":""});
+  students.push({sl:students.length+1,"B.S. Portal ID":"","Class":"X","Section":"A","Roll":"","Name":"","Sex":"","1st Language":"BNGA"});
   renderStudents();
 }
 function renderStudents(){
   const q=normalize(document.getElementById("mp_studentSearch").value).toLowerCase();
   const body=document.getElementById("mp_studentBody");
   const filtered=students.filter(s=>Object.values(s).join(" ").toLowerCase().includes(q));
-  document.getElementById("mp_studentHead").innerHTML="<tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th>"+(isAdmin()?"<th>Action</th>":"")+"</tr>";
+  document.getElementById("mp_studentHead").innerHTML="<tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>1st Language</th>"+(isAdmin()?"<th>Action</th>":"")+"</tr>";
   body.innerHTML=filtered.map((s,i)=>{
     const idx=students.indexOf(s);
-    return `<tr><td>${i+1}</td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(cls(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${escapeHtml(sex(s))}</td>${isAdmin()?`<td><button class="btn danger" style="padding:6px 9px" onclick="MP.deleteStudent(${idx})">Delete</button></td>`:""}</tr>`;
-  }).join("")||"<tr><td colspan='8'>No students loaded.</td></tr>";
+    return `<tr><td>${i+1}</td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(cls(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${escapeHtml(sex(s))}</td><td>${isAdmin()?`<select onchange="MP.setLang(${idx},this.value)"><option value="BNGA"${firstLang(s)==="BNGA"?" selected":""}>Bengali</option><option value="SANT"${firstLang(s)==="SANT"?" selected":""}>Santali</option></select>`:(firstLang(s)==="SANT"?"Santali":"Bengali")}</td>${isAdmin()?`<td><button class="btn danger" style="padding:6px 9px" onclick="MP.deleteStudent(${idx})">Delete</button></td>`:""}</tr>`;
+  }).join("")||"<tr><td colspan='9'>No students loaded.</td></tr>";
 }
 function deleteStudent(i){if(!requireAdmin())return;if(confirm("Delete this student?")){students.splice(i,1);students.forEach((s,i)=>s.sl=i+1);renderStudents()}}
 async function saveStudents(){
@@ -2214,7 +2218,7 @@ async function loadAttendance(){
     attendanceLocked=snap.exists&&!!snap.data().locked;
     attendanceLockInfo=snap.exists?(snap.data().lockedByName||""):"";
     const saved=snap.exists?(snap.data().rows||[]):[];
-    attendanceRows=students.map((s,i)=>{const old=saved.find(r=>keyOf(r.student)===keyOf(s));return {sl:i+1,student:s,status:old?old.status:"P"}});
+    attendanceRows=students.filter(s=>takesSubject(s,subject)).map((s,i)=>{const old=saved.find(r=>keyOf(r.student)===keyOf(s));return {sl:i+1,student:s,status:old?old.status:"P"}});
     renderAttendance();updateAttendanceLockUI();
   }catch(e){alert("Could not load attendance: "+e.message)}
 }
@@ -2273,7 +2277,7 @@ async function loadMarks(){
     const snap=await db.collection("mpMarks").doc(mid).get();
     marksLocked=snap.exists&&!!snap.data().locked;marksOwnerUid=snap.exists?(snap.data().ownerUid||null):null;marksLockInfo=snap.exists?(snap.data().lockedByName||""):"";
     const saved=snap.exists?(snap.data().rows||[]):[];
-    marksRows=students.map((s,i)=>{const old=saved.find(r=>keyOf(r.student)===keyOf(s));return {sl:i+1,student:s,written:absent.has(keyOf(s))?"":(old?.written??""),ife:absent.has(keyOf(s))?"":(old?.ife??""),absent:absent.has(keyOf(s))}});
+    marksRows=students.filter(s=>takesSubject(s,subject)).map((s,i)=>{const old=saved.find(r=>keyOf(r.student)===keyOf(s));return {sl:i+1,student:s,written:absent.has(keyOf(s))?"":(old?.written??""),ife:absent.has(keyOf(s))?"":(old?.ife??""),absent:absent.has(keyOf(s))}});
     updateMarksLockUI();renderMarks();
   }catch(e){alert("Could not load marks: "+e.message)}
 }
@@ -2352,7 +2356,7 @@ function printAttendance(){printTable("mp_attendanceBody","MP (SE) 2027 — Atte
 function printMarks(){printTable("mp_marksBody","MP (SE) 2027 — Marks Entry")}
 function printStudents(){printTable("mp_studentBody","MP (SE) 2027 — Student List")}
 function printTable(bodyId,title){
-  const html=document.getElementById(bodyId).closest("table").outerHTML;
+  const _t=document.getElementById(bodyId).closest("table").cloneNode(true);_t.querySelectorAll("select").forEach(x=>x.replaceWith(x.options[x.selectedIndex].text));const html=_t.outerHTML;
   const w=window.open("","_blank");w.document.write(`<html><head><title>${title}</title><style>body{font-family:Arial;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:6px;font-size:11px}th{background:#eee}</style></head><body><h2>TALDANGRA FULMATI HIGH SCHOOL [H.S.]</h2><h3 style="text-align:center">${title}</h3>${html}</body></html>`);w.document.close();w.print();
 }
 
@@ -2380,7 +2384,7 @@ async function updateAnalysis(){
   }catch(e){document.getElementById("mp_analysisText").textContent=e.message}
 }
 
-window.MP={showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult};
+window.MP={showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult};
 })();
 </script>
 </body>
