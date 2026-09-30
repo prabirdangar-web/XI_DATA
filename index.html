@@ -194,6 +194,7 @@ tr:hover td{background:#f8fafc}
 .rolebar button{padding:8px 12px;border:0;border-radius:7px;font-weight:700;cursor:pointer}
 .role-badge{padding:5px 10px;border-radius:999px;background:#2563eb;font-size:12px;font-weight:800}
 .lockbox{margin-top:10px;padding:10px 12px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:12px;font-weight:700}
+@media print{.noprint{display:none}}
 .lockbox.ok{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
 </style>
 </head>
@@ -215,6 +216,7 @@ tr:hover td{background:#f8fafc}
     <button onclick="showView('marks',this)">📝 Marks Entry</button>
     <button onclick="showView('combined',this)">🧮 Combined Result (FM-100)</button>
     <button onclick="showView('analysis',this)">📊 Result Analysis</button>
+    <button id="navSubjects" style="display:none" onclick="showView('subjects',this)">⚙️ Subjects (Admin)</button>
     <button onclick="showView('rules',this)">📚 WBCHSE Rules</button>
   </div>
 
@@ -304,7 +306,8 @@ tr:hover td{background:#f8fafc}
         <input type="file" id="excelFile" accept=".xlsx,.xls,.xlsm">
       </div>
       <button class="btn" onclick="importExcel()">Import Excel</button>
-      <button id="saveStudentsBtn" class="btn success" onclick="saveStudents()">Save Students</button>
+      <button id="addStudentBtn" class="btn" style="display:none" onclick="addStudent()">➕ Add Student</button>
+      <button id="saveStudentsBtn" class="btn success" onclick="saveStudents()">Save All Students</button>
       <button class="btn secondary" onclick="printStudents()">Print</button>
     </div>
     <p style="font-size:12px;color:#64748b">
@@ -375,6 +378,7 @@ tr:hover td{background:#f8fafc}
       <button id="unlockAttendanceBtn" class="btn secondary" onclick="unlockAttendance()">Admin Unlock</button>
       <button class="btn secondary" onclick="printAttendance()">Print</button>
       <button class="btn secondary" onclick="printSignatureSheet()">Print Signature Sheet</button>
+      <button id="deleteAttendanceBtn" class="btn danger" style="display:none" onclick="deleteAttendanceSheet()">🗑 Delete Sheet</button>
     </div>
   </div>
 
@@ -431,6 +435,7 @@ tr:hover td{background:#f8fafc}
       <button id="unlockMarksBtn" class="btn secondary" onclick="unlockMarks()">Admin Unlock</button>
       <button class="btn secondary" onclick="printMarks()">Print</button>
       <button class="btn secondary" onclick="printMarksEntrySheet()">Print Marks Entry Sheet</button>
+      <button id="deleteMarksBtn" class="btn danger" style="display:none" onclick="deleteMarksSheet()">🗑 Delete Sheet</button>
     </div>
 
     <div id="schemeBox" class="scheme">Select a subject.</div>
@@ -508,9 +513,10 @@ tr:hover td{background:#f8fafc}
             <th>Practical / Project</th>
             <th>Total</th>
             <th>Result</th>
+            <th class="noprint">Action</th>
           </tr>
         </thead>
-        <tbody id="combinedBody"><tr><td colspan="9">Select a subject and click Generate.</td></tr></tbody>
+        <tbody id="combinedBody"><tr><td colspan="10">Select a subject and click Generate.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -543,6 +549,17 @@ tr:hover td{background:#f8fafc}
   <div class="panel">
     <h3>Analysis</h3>
     <p id="analysisText">Enter marks to generate the current analysis.</p>
+  </div>
+</section>
+
+<!-- SUBJECTS (ADMIN) -->
+<section id="subjects" class="view">
+  <div class="title">Subjects &amp; Exam Schedule</div>
+  <div class="subtitle">Admin only — add, edit or delete subjects, full-marks scheme and exam date. Saved directly to Firebase.</div>
+  <div class="panel">
+    <button class="btn" onclick="editSubject()">➕ Add Subject</button>
+    <div class="tablewrap"><table><thead><tr><th>Code</th><th>Theory</th><th>Practical</th><th>Project</th><th>Full Marks</th><th>Exam Date</th><th>Action</th></tr></thead>
+    <tbody id="subjectsBody"></tbody></table></div>
   </div>
 </section>
 
@@ -603,7 +620,7 @@ let combinedRows = [];
 let importedHeaders = [];
 
 /* SUBJECT SCHEMES */
-const SCHEMES = {
+let SCHEMES = {
   BNGA:{theory:40,practical:0,project:20},
   ENGB:{theory:40,practical:0,project:20},
   SNSK:{theory:40,practical:0,project:20},
@@ -620,15 +637,16 @@ const SCHEMES = {
   COMS:{theory:35,practical:30,project:0}
 };
 
-const SUBJECTS = Object.keys(SCHEMES);
+let SUBJECTS = Object.keys(SCHEMES);
 
-const EXAM_SCHEDULE = {
+let EXAM_SCHEDULE = {
   BNGA:"21-09-2026", ENGB:"24-09-2026", HIST:"30-09-2026", PHIL:"03-10-2026",
   SNSK:"05-10-2026", GEGR:"01-10-2026", COMA:"29-09-2026", BIOS:"07-10-2026",
   CHEM:"01-10-2026", PHYS:"28-09-2026", MATH:"05-10-2026", COMS:"29-09-2026",
   SANT:"21-09-2026", POLS:"07-10-2026"
 };
-const ATTENDANCE_SUBJECTS = Object.keys(EXAM_SCHEDULE);
+let ATTENDANCE_SUBJECTS = Object.keys(EXAM_SCHEDULE);
+function refreshSubjectLists(){SUBJECTS=Object.keys(SCHEMES);ATTENDANCE_SUBJECTS=Object.keys(EXAM_SCHEDULE);}
 
 /* AUTH + EXISTING STAFF ROLE PROTECTION */
 /*
@@ -710,7 +728,8 @@ function applyRoleUI(){
     else msg.textContent="Read-only until an authorised existing staff account is signed in.";
   }
 
-  const adminIds=["saveStudentsBtn","unlockAttendanceBtn","unlockMarksBtn","unlockResultBtn"];
+  const adminIds=["saveStudentsBtn","addStudentBtn","deleteAttendanceBtn","deleteMarksBtn","unlockAttendanceBtn","unlockMarksBtn","unlockResultBtn"];
+  const ns=document.getElementById("navSubjects"); if(ns) ns.style.display=isAdmin()?"block":"none";
   adminIds.forEach(id=>{const el=document.getElementById(id); if(el) el.style.display=isAdmin()?"inline-block":"none";});
 
   const marksSection=document.querySelector('.nav button[onclick*="showView(\'marks\'"]');
@@ -719,6 +738,7 @@ function applyRoleUI(){
   if(resultSection) resultSection.style.display=canResult()?"block":"none";
 
   updateAttendanceLockUI(); updateMarksLockUI(); updateResultLockUI();
+  renderStudents(); renderSubjects(); renderAttendance(); if(combinedRows.length) renderCombined();
 }
 
 async function loginUser(){
@@ -744,7 +764,7 @@ auth.onAuthStateChanged(async user=>{
 auth.signInAnonymously().then(()=>{
   document.getElementById("statusDot").style.background="#16a34a";
   document.getElementById("dashboardStatus").innerHTML="<b style='color:#16a34a'>Firebase connected. Sign in using your existing TFHS staff/admin account for protected data entry.</b>";
-  loadStudents();
+  loadSubjectConfig(); loadStudents();
 }).catch(err=>{
   document.getElementById("authUser").textContent="Error";
   document.getElementById("statusText").textContent="Firebase Error";
@@ -754,6 +774,7 @@ auth.signInAnonymously().then(()=>{
 
 /* NAVIGATION */
 function showView(id,btn){
+  if(id==="subjects" && !isAdmin()){ alert("Only Admin can manage subjects."); return; }
   if(id==="marks" && !canMarks()){ alert("Marks Entry is restricted to authorised Staff/Teacher/Admin accounts."); return; }
   if(id==="combined" && !canResult()){ alert("Combined Result is restricted to authorised Staff/Teacher/Admin accounts."); return; }
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
@@ -891,34 +912,132 @@ function importExcel(){
   reader.readAsArrayBuffer(file);
 }
 
+function studentHeaders(){
+  if(importedHeaders.length) return importedHeaders;
+  const h=[]; students.forEach(x=>Object.keys(x).forEach(k=>{ if(k!=="sl"&&!h.includes(k)) h.push(k); }));
+  return h.length?h:["Registration","Name","Gender","S-1","S-2","S-3","S-4","S-5","S-6"];
+}
 function renderStudents(){
   const head=document.getElementById("studentHead");
   const body=document.getElementById("studentBody");
   const q=(document.getElementById("studentSearch").value||"").toLowerCase();
-
+  const admin=isAdmin();
   if(!students.length){
     head.innerHTML="";
-    body.innerHTML="<tr><td colspan='10'>No students loaded.</td></tr>";
+    body.innerHTML="<tr><td colspan='10'>No students loaded."+(admin?" Use Add Student or import Excel.":"")+"</td></tr>";
     return;
   }
+  const headers=studentHeaders();
+  head.innerHTML="<tr><th>SL</th>"+headers.map(h=>`<th>${escapeHtml(h)}</th>`).join("")+(admin?"<th class='noprint'>Action</th>":"")+"</tr>";
+  body.innerHTML=students.map((s,idx)=>({s,idx}))
+    .filter(o=>Object.values(o.s).join(" ").toLowerCase().includes(q))
+    .map((o,i)=>"<tr><td>"+(i+1)+"</td>"+headers.map(h=>`<td>${escapeHtml(o.s[h]??"")}</td>`).join("")+
+      (admin?`<td class="noprint" style="white-space:nowrap"><button class="btn light" onclick="editStudent(${o.idx})">✏️ Edit</button> <button class="btn danger" onclick="deleteStudent(${o.idx})">🗑</button></td>`:"")+"</tr>").join("");
+}
+async function persistStudents(){
+  students.forEach((x,i)=>x.sl=i+1);
+  await db.collection("students").doc("xi2026").set({students:students,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  renderStudents(); updateDashboard();
+}
+function addStudent(){
+  if(!requireAdmin()) return;
+  const H=studentHeaders();
+  showModal("Add Student",H.map(h=>({label:h,val:""})),async v=>{
+    const o={}; H.forEach((h,i)=>o[h]=v[i]);
+    if(!getStudentReg(o)&&!getStudentName(o)){ alert("Enter at least Registration No. or Name."); return false; }
+    const reg=String(getStudentReg(o)||"").trim();
+    if(reg&&students.some(x=>String(getStudentReg(x)||"").trim()===reg)){ alert("A student with this Registration No. already exists."); return false; }
+    if(!importedHeaders.length) importedHeaders=H;
+    students.push({sl:students.length+1,...o});
+    try{ await persistStudents(); }catch(e){ students.pop(); alert("Save failed: "+e.message); return false; }
+  });
+}
+function editStudent(i){
+  if(!requireAdmin()) return;
+  const H=studentHeaders(), old=students[i];
+  showModal("Edit Student",H.map(h=>({label:h,val:old[h]??""})),async v=>{
+    const backup={...old}; H.forEach((h,k)=>old[h]=v[k]);
+    try{ await persistStudents(); }catch(e){ Object.assign(old,backup); alert("Save failed: "+e.message); return false; }
+  });
+}
+async function deleteStudent(i){
+  if(!requireAdmin()) return;
+  const st=students[i];
+  if(!confirm("Delete student "+(getStudentName(st)||"")+" ("+(getStudentReg(st)||"")+")? This is saved immediately.")) return;
+  students.splice(i,1);
+  try{ await persistStudents(); }catch(e){ students.splice(i,0,st); alert("Delete failed: "+e.message); renderStudents(); }
+}
 
-  const headers=importedHeaders.length
-    ? importedHeaders
-    : Object.keys(students[0]).filter(x=>x!=="sl");
+/* ---------- generic modal ---------- */
+function closeModal(){ const m=document.getElementById("modalBg"); if(m) m.remove(); }
+function showModal(title,fields,onSave){
+  closeModal();
+  const d=document.createElement("div"); d.id="modalBg";
+  d.style.cssText="position:fixed;inset:0;background:#0008;z-index:100;display:flex;align-items:center;justify-content:center;padding:15px";
+  d.innerHTML=`<div class="panel" style="width:480px;max-width:100%;max-height:90vh;overflow:auto;margin:0"><h3>${escapeHtml(title)}</h3>`+
+    fields.map((f,i)=>`<div class="field" style="margin-bottom:10px"><label>${escapeHtml(f.label)}</label><input id="mf${i}" type="${f.type||"text"}" value="${escapeHtml(f.val??"")}" ${f.ro?"readonly":""} style="width:100%"></div>`).join("")+
+    `<div class="toolbar"><button class="btn success" id="mSave">Save</button><button class="btn light" onclick="closeModal()">Cancel</button></div></div>`;
+  document.body.appendChild(d);
+  document.getElementById("mSave").onclick=async()=>{
+    const btn=document.getElementById("mSave"); btn.disabled=true;
+    const vals=fields.map((f,i)=>document.getElementById("mf"+i).value.trim());
+    const r=await onSave(vals); btn.disabled=false;
+    if(r!==false) closeModal();
+  };
+}
 
-  head.innerHTML="<tr><th>SL</th>"+
-    headers.map(h=>`<th>${escapeHtml(h)}</th>`).join("")+
-    "</tr>";
-
-  const filtered=students.filter(s=>
-    Object.values(s).join(" ").toLowerCase().includes(q)
-  );
-
-  body.innerHTML=filtered.map((s,i)=>
-    "<tr><td>"+(i+1)+"</td>"+
-    headers.map(h=>`<td>${escapeHtml(s[h]??"")}</td>`).join("")+
-    "</tr>"
-  ).join("");
+/* ---------- subjects (admin) ---------- */
+async function loadSubjectConfig(){
+  try{
+    const c=await db.collection("students").doc("xiConfig").get();
+    if(c.exists && c.data().schemes){
+      SCHEMES=c.data().schemes; EXAM_SCHEDULE=c.data().schedule||{};
+      refreshSubjectLists(); populateSubjects(); updateDashboard();
+    }
+  }catch(e){ console.warn("Subject config load:",e); }
+  renderSubjects();
+}
+async function persistSubjects(){
+  await db.collection("students").doc("xiConfig").set({schemes:SCHEMES,schedule:EXAM_SCHEDULE,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  refreshSubjectLists(); populateSubjects(); renderSubjects(); updateDashboard();
+}
+function renderSubjects(){
+  const b=document.getElementById("subjectsBody"); if(!b) return;
+  const codes=Array.from(new Set([...Object.keys(SCHEMES),...Object.keys(EXAM_SCHEDULE)]));
+  b.innerHTML=codes.map(c=>{
+    const x=SCHEMES[c];
+    return `<tr><td><b>${c}</b></td><td>${x?x.theory:"—"}</td><td>${x?x.practical:"—"}</td><td>${x?x.project:"—"}</td><td>${x?x.theory*2+(x.practical||x.project):"—"}</td><td>${EXAM_SCHEDULE[c]||"—"}</td>`+
+      `<td style="white-space:nowrap"><button class="btn light" onclick="editSubject('${c}')">✏️ Edit</button> <button class="btn danger" onclick="deleteSubject('${c}')">🗑</button></td></tr>`;
+  }).join("")||"<tr><td colspan='7'>No subjects.</td></tr>";
+}
+function editSubject(code){
+  if(!requireAdmin()) return;
+  const x=code?(SCHEMES[code]||{theory:"",practical:0,project:0}):{theory:40,practical:0,project:20};
+  showModal(code?"Edit Subject "+code:"Add Subject",[
+    {label:"Subject Code (e.g. BNGA)",val:code||"",ro:!!code},
+    {label:"Theory marks (per semester)",val:x.theory,type:"number"},
+    {label:"Practical marks (0 if none)",val:x.practical,type:"number"},
+    {label:"Project marks (0 if none)",val:x.project,type:"number"},
+    {label:"Exam Date (DD-MM-YYYY, optional)",val:(code&&EXAM_SCHEDULE[code])||""}
+  ],async v=>{
+    const c=(code||v[0]).toUpperCase().replace(/\s/g,"");
+    if(!/^[A-Z0-9]{2,10}$/.test(c)){ alert("Enter a valid subject code (letters/numbers)."); return false; }
+    if(!code&&SCHEMES[c]){ alert("Subject already exists — use Edit."); return false; }
+    const t=Number(v[1]),pr=Number(v[2])||0,pj=Number(v[3])||0;
+    if(!(t>0)){ alert("Theory marks must be greater than 0."); return false; }
+    if(v[4]&&!/^\d{2}-\d{2}-\d{4}$/.test(v[4])){ alert("Date must be DD-MM-YYYY."); return false; }
+    const bk=[JSON.stringify(SCHEMES),JSON.stringify(EXAM_SCHEDULE)];
+    SCHEMES[c]={theory:t,practical:pr,project:pj};
+    if(v[4]) EXAM_SCHEDULE[c]=v[4]; else delete EXAM_SCHEDULE[c];
+    try{ await persistSubjects(); }catch(e){ SCHEMES=JSON.parse(bk[0]); EXAM_SCHEDULE=JSON.parse(bk[1]); alert("Save failed: "+e.message); return false; }
+  });
+}
+async function deleteSubject(c){
+  if(!requireAdmin()) return;
+  if(!confirm("Delete subject "+c+" from the portal? Already-saved attendance/marks records stay in the database. Saved immediately.")) return;
+  const bk=[JSON.stringify(SCHEMES),JSON.stringify(EXAM_SCHEDULE)];
+  delete SCHEMES[c]; delete EXAM_SCHEDULE[c];
+  try{ await persistSubjects(); }catch(e){ SCHEMES=JSON.parse(bk[0]); EXAM_SCHEDULE=JSON.parse(bk[1]); alert("Delete failed: "+e.message); renderSubjects(); }
 }
 
 async function saveStudents(){
@@ -1101,6 +1220,8 @@ function watchAttendanceLock(id){
   },e=>console.warn("Attendance lock watcher:",e));
 }
 let attendanceLockInfo="";
+function attLockedFor(){ return attendanceLocked && !isAdmin(); }
+function mkLockedFor(){ return marksLocked && !isAdmin(); }
 function renderAttendance(){
   const body=document.getElementById("attendanceBody");
   const q=(document.getElementById("attendanceSearch").value||"").toLowerCase().trim();
@@ -1113,17 +1234,17 @@ function renderAttendance(){
   });
   body.innerHTML=rows.length ? rows.map(r=>{
     const idx=attendanceRows.indexOf(r);
-    return `<tr><td>${r.sl}</td><td>${escapeHtml(getStudentReg(r.student))}</td><td>${escapeHtml(getStudentName(r.student))}</td><td>${escapeHtml(getStudentSex(r.student))}</td><td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td><td><div class="attendance-buttons"><button class="pbtn" ${attendanceLocked||!canAttendance()?"disabled":""} onclick="setAttendance(${idx},'P')">P</button><button class="abtn" ${attendanceLocked||!canAttendance()?"disabled":""} onclick="setAttendance(${idx},'A')">A</button></div></td></tr>`;
+    return `<tr><td>${r.sl}</td><td>${escapeHtml(getStudentReg(r.student))}</td><td>${escapeHtml(getStudentName(r.student))}</td><td>${escapeHtml(getStudentSex(r.student))}</td><td><span class="badge ${r.status==="P"?"present":"absent"}">${r.status==="P"?"PRESENT":"ABSENT"}</span></td><td><div class="attendance-buttons"><button class="pbtn" ${attLockedFor()||!canAttendance()?"disabled":""} onclick="setAttendance(${idx},'P')">P</button><button class="abtn" ${attLockedFor()||!canAttendance()?"disabled":""} onclick="setAttendance(${idx},'A')">A</button></div></td></tr>`;
   }).join("") : "<tr><td colspan='6'>No students match the selected filter.</td></tr>";
 }
 function setAttendance(i,status){
   if(!requireAttendance())return;
-  if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;}
+  if(attLockedFor()){alert('Attendance is locked. Only Admin can unlock it.');return;}
   attendanceRows[i].status=status; renderAttendance();
 }
 function markAllAttendance(status){
   if(!requireAttendance())return;
-  if(attendanceLocked){alert('Attendance is locked. Only Admin can unlock it.');return;}
+  if(attLockedFor()){alert('Attendance is locked. Only Admin can unlock it.');return;}
   attendanceRows.forEach(r=>r.status=status); renderAttendance();
 }
 function attendancePayload(subject,date){
@@ -1132,14 +1253,14 @@ function attendancePayload(subject,date){
 /* Save/Lock run inside a transaction that re-reads the sheet from the server,
    so a sheet locked by anyone else a moment ago can never be overwritten. */
 async function saveAttendance(){
-  if(!requireAttendance()||attendanceLocked) return;
+  if(!requireAttendance()||attLockedFor()) return;
   const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value;
   if(!attendanceRows.length){ alert("Generate the attendance sheet first."); return; }
   const id=`${subject}_${date}`.replace(/[\/\s]/g,"_"), ref=db.collection("xiAttendance").doc(id);
   try{
     const ok=await db.runTransaction(async tx=>{
       const snap=await tx.get(ref);
-      if(snap.exists && snap.data().locked) return false;
+      if(snap.exists && snap.data().locked && !isAdmin()) return false;
       const data=attendancePayload(subject,date);
       if(!snap.exists){ data.locked=false; data.ownerUid=currentUser?.uid||null; }
       tx.set(ref,data,{merge:true});
@@ -1178,8 +1299,17 @@ async function unlockAttendance(){
 }
 function updateAttendanceLockUI(){
   const box=document.getElementById("attendanceLockBox"); if(box) {box.className="lockbox "+(attendanceLocked?"":"ok"); box.textContent=attendanceLocked?("🔒 ATTENDANCE LOCKED"+(attendanceLockInfo?" by "+attendanceLockInfo:"")+" — read-only. Only Admin can unlock."):"🔓 ATTENDANCE OPEN — Admin, Staff, Teacher and Invigilator can all enter/edit until it is Submitted & Locked.";}
-  document.querySelectorAll('[onclick^="markAllAttendance"]').forEach(el=>el.disabled=attendanceLocked||!canAttendance());
-  ["saveAttendanceBtn","lockAttendanceBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=attendanceLocked||!canAttendance();});
+  document.querySelectorAll('[onclick^="markAllAttendance"]').forEach(el=>el.disabled=attLockedFor()||!canAttendance());
+  ["saveAttendanceBtn","lockAttendanceBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=attLockedFor()||!canAttendance();});
+}
+async function deleteAttendanceSheet(){
+  if(!requireAdmin()) return;
+  const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value;
+  if(!subject||!date){ alert("Select the exam subject first."); return; }
+  if(!confirm("DELETE the saved attendance sheet for "+subject+" ("+date+")? This cannot be undone.")) return;
+  const id=`${subject}_${date}`.replace(/[\/\s]/g,"_");
+  try{ await db.collection("xiAttendance").doc(id).delete(); attendanceRows=[]; attendanceLocked=false; attendanceLockInfo=""; renderAttendance(); updateAttendanceLockUI(); alert("Attendance sheet deleted."); }
+  catch(e){ alert("Delete failed: "+e.message); }
 }
 function printAttendance(){
   const subject=document.getElementById("attSubject").value, date=document.getElementById("attDate").value;
@@ -1281,7 +1411,7 @@ async function loadMarks(){
 }
 function updateMarksLockUI(){
   const attNotReady=marksAttendanceStatus!=="locked";
-  ["saveMarksBtn","lockMarksBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=marksLocked||!canMarks()||attNotReady;});
+  ["saveMarksBtn","lockMarksBtn"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=mkLockedFor()||!canMarks()||attNotReady;});
   const msg=document.getElementById("marksAttendanceMsg");
   if(!msg) return;
   const subject=document.getElementById("marksSubject").value;
@@ -1393,7 +1523,7 @@ function renderMarks(){
 function setMark(i,key,value){
   if(!requireMarks()) return;
   if(marksAttendanceStatus!=="locked"){alert("Attendance is not yet finalized for this subject. Marks entry is disabled.");renderMarks();return;}
-  if(marksLocked){alert("Marks are locked. Only Admin can unlock.");renderMarks();return;}
+  if(mkLockedFor()){alert("Marks are locked. Only Admin can unlock.");renderMarks();return;}
   if(!canEditUnlocked(marksOwnerUid)){alert("These marks are assigned to another staff member. Only Admin can change them.");return;}
   const r=marksRows[i];
   if(marksAbsentKeys.has(studentKey(r.student))){alert("This student was recorded ABSENT in the locked attendance. Marks entry is locked for this student.");renderMarks();return;}
@@ -1402,7 +1532,7 @@ function setMark(i,key,value){
 }
 
 async function saveMarks(){
-  if(!requireMarks()||marksLocked) return;
+  if(!requireMarks()||mkLockedFor()) return;
   const exam=document.getElementById("marksExam").value;
   const subject=document.getElementById("marksSubject").value;
 
@@ -1436,6 +1566,7 @@ async function saveMarks(){
           component:absent?"":r.component
         };
       }),
+      locked:!!marksLocked,
       ownerUid:marksOwnerUid||currentUser?.uid||null,
       updatedBy:currentUser?.uid||null,
       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
@@ -1448,6 +1579,14 @@ async function saveMarks(){
   }
 }
 
+async function deleteMarksSheet(){
+  if(!requireAdmin()) return;
+  const exam=document.getElementById("marksExam").value,subject=document.getElementById("marksSubject").value;
+  if(!subject) return;
+  if(!confirm("DELETE all saved marks for "+subject+" ("+exam+")? This cannot be undone.")) return;
+  try{ await db.collection("xiMarks").doc(`${exam}_${subject}`).delete(); alert("Marks sheet deleted."); loadMarks(); }
+  catch(e){ alert("Delete failed: "+e.message); }
+}
 function printMarks(){
   printElement("marksBody","Marks Entry");
 }
@@ -1655,10 +1794,44 @@ function renderCombined(){
       <td>${r.comp===null?"—":r.comp}</td>
       <td>${allEntered?total:"—"}</td>
       <td class="result">${result?`<span class="badge ${result==="PASS"?"pass":"fail"}">${result}</span>`:""}</td>
+      <td class="noprint"><button class="btn light" ${(!canResult()||(resultLocked&&!isAdmin()))?"disabled":""} onclick="editCombined(${combinedRows.indexOf(r)})">✏️ Edit</button></td>
     </tr>`;
-  }).join("") : "<tr><td colspan='9'>No students match the selected filter.</td></tr>";
+  }).join("") : "<tr><td colspan='10'>No students match the selected filter.</td></tr>";
 }
 
+async function upsertMark(exam,sub,student,vals){
+  const ref=db.collection("xiMarks").doc(`${exam}_${sub}`);
+  const snap=await ref.get(), d=snap.exists?snap.data():{};
+  if(d.locked&&!isAdmin()) throw new Error(exam+" marks are locked. Only Admin can change them.");
+  if(snap.exists&&!canEditUnlocked(d.ownerUid||d.updatedBy)) throw new Error("These marks are assigned to another staff member.");
+  const rows=d.rows||[], key=studentKey(student);
+  let row=rows.find(x=>studentKey(x.student)===key);
+  if(!row){ row={student,theory:"",component:""}; rows.push(row); }
+  Object.assign(row,vals);
+  const payload={exam,subject:sub,rows,updatedBy:currentUser?.uid||null,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if(!snap.exists){ payload.ownerUid=currentUser?.uid||null; payload.locked=false; }
+  await ref.set(payload,{merge:true});
+}
+function editCombined(i){
+  if(!requireResult()) return;
+  if(resultLocked&&!isAdmin()){ alert("Result is finalized. Only Admin can change it."); return; }
+  const r=combinedRows[i], sub=document.getElementById("combSubject").value, sc=SCHEMES[sub];
+  if(!r||!sc) return;
+  const cm=sc.practical||sc.project, cl=sc.practical?"Practical":"Project";
+  showModal("Edit marks — "+(getStudentName(r.student)||""),[
+    {label:`Sem I Theory (max ${sc.theory})`,val:r.sem1Theory??"",type:"number"},
+    {label:`Sem II Theory (max ${sc.theory})`,val:r.sem2Theory??"",type:"number"},
+    {label:`${cl} (max ${cm})`,val:r.comp??"",type:"number"}
+  ],async v=>{
+    const mx=[sc.theory,sc.theory,cm];
+    for(let k=0;k<3;k++){ if(v[k]!==""&&(Number(v[k])<0||Number(v[k])>mx[k])){ alert("Marks must be between 0 and "+mx[k]+"."); return false; } }
+    try{
+      await upsertMark("SEM1",sub,r.student,{theory:v[0]});
+      await upsertMark("SEM2",sub,r.student,{theory:v[1],component:v[2]});
+      await generateCombined();
+    }catch(e){ alert("Save failed: "+e.message); return false; }
+  });
+}
 async function getResultLock(subject){
   if(!subject)return false;
   try{const s=await db.collection("xiResults").doc(subject).get();return s.exists&&!!s.data().locked;}catch(e){return false;}
@@ -1766,6 +1939,7 @@ function printElement(bodyId,title){
         table{width:100%;border-collapse:collapse}
         th,td{border:1px solid #999;padding:7px}
         th{background:#eee}
+        .noprint{display:none}
       </style>
     </head>
     <body>
