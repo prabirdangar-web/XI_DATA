@@ -628,7 +628,7 @@ tr:hover td{background:#f8fafc}
   <div class="panel">
     <h3>Workflow</h3>
     <div class="quick">
-      <button onclick="MP.showView('mp_students')"><strong>1. Student Database</strong><span>Reg No., Class, Section, Roll, Name and Sex.</span></button>
+      <button onclick="MP.showView('mp_students')"><strong>1. Student Database</strong><span>B.S. Portal ID, Class, Section, Roll, Name and Sex.</span></button>
       <button onclick="MP.showView('mp_attendance')"><strong>2. Attendance</strong><span>Subject-wise attendance; lock after submission.</span></button>
       <button onclick="MP.showView('mp_marks')"><strong>3. Marks &amp; Lock</strong><span>Written 90 + IFE 10. Result opens only after all marks are entered and locked.</span></button>
     </div>
@@ -637,7 +637,7 @@ tr:hover td{background:#f8fafc}
 
 <section id="mp_students" class="view">
   <div class="title">Class X Student Database</div>
-  <div class="subtitle">Reg No. / Class / Section / Roll / Name / Sex</div>
+  <div class="subtitle">B.S. Portal ID / Class / Section / Roll / Name / Sex</div>
   <div class="panel">
     <div class="toolbar">
       <div class="field"><label>Excel File</label><input type="file" id="mp_excelFile" accept=".xlsx,.xls,.xlsm"></div>
@@ -646,10 +646,10 @@ tr:hover td{background:#f8fafc}
       <button class="btn secondary" onclick="MP.addStudent()">Add Student</button>
       <button class="btn secondary" onclick="MP.printStudents()">Print</button>
     </div>
-    <p style="font-size:12px;color:#64748b">Excel headings can be Reg No, Class, Section, Roll, Name and Sex (common spelling variations are accepted).</p>
+    <p style="font-size:12px;color:#64748b">Excel headings can be B.S. Portal ID, Class, Section, Roll, Name and Sex (common spelling variations are accepted).</p>
   </div>
   <div class="panel">
-    <div class="toolbar"><div class="field" style="flex:1"><label>Search</label><input id="mp_studentSearch" placeholder="Reg No. / Roll / Name" oninput="MP.renderStudents()"></div></div>
+    <div class="toolbar"><div class="field" style="flex:1"><label>Search</label><input id="mp_studentSearch" placeholder="B.S. Portal ID / Roll / Name" oninput="MP.renderStudents()"></div></div>
     <div class="tablewrap"><table><thead id="mp_studentHead"></thead><tbody id="mp_studentBody"></tbody></table></div>
   </div>
 </section>
@@ -662,7 +662,7 @@ tr:hover td{background:#f8fafc}
       <div class="field"><label>Subject</label><select id="mp_attSubject" onchange="MP.loadAttendance()"></select></div>
       <div class="field"><label>Date</label><input id="mp_attDate" readonly></div>
       <div class="field"><label>Sex</label><select id="mp_attSex" onchange="MP.renderAttendance()"><option>ALL</option><option>Male</option><option>Female</option></select></div>
-      <div class="field" style="flex:1"><label>Search</label><input id="mp_attendanceSearch" placeholder="Reg No. / Roll / Name" oninput="MP.renderAttendance()"></div>
+      <div class="field" style="flex:1"><label>Search</label><input id="mp_attendanceSearch" placeholder="B.S. Portal ID / Roll / Name" oninput="MP.renderAttendance()"></div>
       <button class="btn success" onclick="MP.markAllAttendance('P')">All Present</button>
       <button class="btn danger" onclick="MP.markAllAttendance('A')">All Absent</button>
       <button id="mp_saveAttendanceBtn" class="btn warning" onclick="MP.saveAttendance()">Save Draft</button>
@@ -672,7 +672,7 @@ tr:hover td{background:#f8fafc}
     </div>
     <div id="mp_attendanceLockBox" class="lockbox">Select a subject.</div>
   </div>
-  <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>Reg No.</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Status</th><th>Action</th></tr></thead><tbody id="mp_attendanceBody"></tbody></table></div></div>
+  <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Status</th><th>Action</th></tr></thead><tbody id="mp_attendanceBody"></tbody></table></div></div>
 </section>
 
 <section id="mp_marks" class="view">
@@ -681,7 +681,7 @@ tr:hover td{background:#f8fafc}
   <div class="panel">
     <div class="toolbar">
       <div class="field"><label>Subject</label><select id="mp_marksSubject" onchange="MP.loadMarks()"></select></div>
-      <div class="field" style="flex:1"><label>Search</label><input id="mp_marksSearch" placeholder="Reg No. / Roll / Name" oninput="MP.renderMarks()"></div>
+      <div class="field" style="flex:1"><label>Search</label><input id="mp_marksSearch" placeholder="B.S. Portal ID / Roll / Name" oninput="MP.renderMarks()"></div>
       <button class="btn" onclick="MP.loadMarks()">Load</button>
       <button id="mp_saveMarksBtn" class="btn success" onclick="MP.saveMarks()">Save Draft</button>
       <button id="mp_lockMarksBtn" class="btn danger" onclick="MP.lockMarks()">Finalize &amp; Lock Marks</button>
@@ -691,7 +691,7 @@ tr:hover td{background:#f8fafc}
     <div class="scheme"><b>Mark Scheme:</b> Written Examination = 90 marks; IFE = 10 marks; Full Marks = 100. Result generation is disabled until every eligible student's marks are complete and the marks sheet is locked.</div>
     <div id="mp_marksLockBox" class="lockbox">Select a subject.</div>
   </div>
-  <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>Reg No.</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Written / 90</th><th>IFE / 10</th><th>Total / 100</th><th>Entry Status</th></tr></thead><tbody id="mp_marksBody"></tbody></table></div></div>
+  <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Written / 90</th><th>IFE / 10</th><th>Total / 100</th><th>Entry Status</th></tr></thead><tbody id="mp_marksBody"></tbody></table></div></div>
 </section>
 
 <section id="mp_result" class="view">
@@ -701,14 +701,13 @@ tr:hover td{background:#f8fafc}
     <div class="toolbar">
       <div class="field"><label>Subject</label><select id="mp_resultSubject" onchange="MP.generateResult()"></select></div>
       <div class="field"><label>Sex</label><select id="mp_resultSex" onchange="MP.renderResult()"><option>ALL</option><option>Male</option><option>Female</option></select></div>
-      <div class="field"><label>Order</label><select id="mp_resultSort" onchange="MP.renderResult()"><option value="ROLL">Roll / list order</option><option value="RANK">Rank order</option></select></div>
-      <div class="field" style="flex:1"><label>Search</label><input id="mp_resultSearch" placeholder="Reg No. / Roll / Name" oninput="MP.renderResult()"></div>
+      <div class="field" style="flex:1"><label>Search</label><input id="mp_resultSearch" placeholder="B.S. Portal ID / Roll / Name" oninput="MP.renderResult()"></div>
       <button class="btn" onclick="MP.generateResult()">Generate</button>
       <button class="btn secondary" onclick="MP.printResult()">Print Result</button>
     </div>
     <div id="mp_resultLockBox" class="lockbox">Select a subject.</div>
   </div>
-  <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>Reg No.</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Written</th><th>IFE</th><th>Total</th><th>Rank</th><th>Result</th></tr></thead><tbody id="mp_resultBody"></tbody></table></div></div>
+  <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Written</th><th>IFE</th><th>Total</th><th>Result</th></tr></thead><tbody id="mp_resultBody"></tbody></table></div></div>
 </section>
 
 <section id="mp_analysis" class="view">
@@ -2103,7 +2102,7 @@ const PROGRAMME={
   BIOS:{name:"LIFE SCIENCE",date:"28-11-2026"}
 };
 const SUBJECTS=Object.keys(PROGRAMME);
-const PASS_MARK=25; // MP (SE) pass mark out of 100.
+const PASS_MARK=30; // Change this value if your school uses a different pass mark out of 100.
 const currentExam="MP-SE-2027";
 
 let students=[], attendanceRows=[], marksRows=[], resultRows=[];
@@ -2116,7 +2115,7 @@ function normalize(v){return String(v??"").trim()}
 function normKey(v){return normalize(v).toLowerCase().replace(/[^a-z0-9]/g,"")}
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function val(s,keys){const obj=Object.keys(s||{}); for(const k of keys){const hit=obj.find(x=>normKey(x)===normKey(k)); if(hit && normalize(s[hit])!=="") return s[hit]} return ""}
-function reg(s){return val(s,["Reg No","Registration No","Registration","RegNo","Registration Number"])}
+function reg(s){return val(s,["B.S. Portal ID","BS Portal ID","Portal ID","Reg No","Registration No","Registration","RegNo","Registration Number"])}
 function cls(s){return val(s,["Class","Class X","Standard"]) || "X"}
 function sec(s){return val(s,["Section","Sec","Section Name"]) || "A"}
 function roll(s){return val(s,["Roll","Roll No","Roll Number"])}
@@ -2184,14 +2183,14 @@ function importExcel(){
 }
 function addStudent(){
   if(!requireAdmin())return;
-  students.push({sl:students.length+1,"Reg No":"","Class":"X","Section":"A","Roll":"","Name":"","Sex":""});
+  students.push({sl:students.length+1,"B.S. Portal ID":"","Class":"X","Section":"A","Roll":"","Name":"","Sex":""});
   renderStudents();
 }
 function renderStudents(){
   const q=normalize(document.getElementById("mp_studentSearch").value).toLowerCase();
   const body=document.getElementById("mp_studentBody");
   const filtered=students.filter(s=>Object.values(s).join(" ").toLowerCase().includes(q));
-  document.getElementById("mp_studentHead").innerHTML="<tr><th>SL</th><th>Reg No.</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th>"+(isAdmin()?"<th>Action</th>":"")+"</tr>";
+  document.getElementById("mp_studentHead").innerHTML="<tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th>"+(isAdmin()?"<th>Action</th>":"")+"</tr>";
   body.innerHTML=filtered.map((s,i)=>{
     const idx=students.indexOf(s);
     return `<tr><td>${i+1}</td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(cls(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${escapeHtml(sex(s))}</td>${isAdmin()?`<td><button class="btn danger" style="padding:6px 9px" onclick="MP.deleteStudent(${idx})">Delete</button></td>`:""}</tr>`;
@@ -2337,19 +2336,16 @@ async function generateResult(){
   const box=document.getElementById("mp_resultLockBox");
   if(!snap.exists||!snap.data().locked){resultRows=[];box.className="lockbox";box.textContent="Result is unavailable: marks for this subject are not yet locked.";renderResult();return}
   resultRows=(snap.data().rows||[]).map((r,i)=>({...r,sl:i+1,total:r.absent?"":Number(r.written)+Number(r.ife)}));
-  const tots=resultRows.filter(r=>!r.absent&&r.total!=="").map(r=>r.total).sort((a,b)=>b-a);
-  resultRows.forEach(r=>{r.rank=(r.absent||r.total==="")?"":tots.indexOf(r.total)+1});
   box.className="lockbox ok";box.textContent="🔒 Marks verified as locked. Result generated from the locked marks.";
   renderResult();
 }
 function renderResult(){
   const q=normalize(document.getElementById("mp_resultSearch").value).toLowerCase(),sx=document.getElementById("mp_resultSex").value;
   const rows=resultRows.filter(r=>{const g=normalize(sex(r.student)).toLowerCase();return (sx==="ALL"||g===sx.toLowerCase())&&(!q||keyOf(r.student).toLowerCase().includes(q)||nameOf(r.student).toLowerCase().includes(q))});
-  if(document.getElementById("mp_resultSort").value==="RANK")rows.sort((a,b)=>(a.rank===""?1e9:a.rank)-(b.rank===""?1e9:b.rank)||a.sl-b.sl);
   document.getElementById("mp_resultBody").innerHTML=rows.map(r=>{
     const result=r.absent?"ABSENT":(Number(r.total)>=PASS_MARK?"PASS":"FAIL");
-    return `<tr><td>${r.sl}</td><td>${escapeHtml(reg(r.student))}</td><td>${escapeHtml(cls(r.student))}</td><td>${escapeHtml(sec(r.student))}</td><td>${escapeHtml(roll(r.student))}</td><td>${escapeHtml(nameOf(r.student))}</td><td>${escapeHtml(sex(r.student))}</td><td>${r.absent?"—":r.written}</td><td>${r.absent?"—":r.ife}</td><td>${r.absent?"—":r.total}</td><td><b>${r.absent?"—":r.rank}</b></td><td><span class="badge ${result==="PASS"?"pass":"fail"}">${result}</span></td></tr>`;
-  }).join("")||"<tr><td colspan='12'>Generate the result after the marks sheet is locked.</td></tr>";
+    return `<tr><td>${r.sl}</td><td>${escapeHtml(reg(r.student))}</td><td>${escapeHtml(cls(r.student))}</td><td>${escapeHtml(sec(r.student))}</td><td>${escapeHtml(roll(r.student))}</td><td>${escapeHtml(nameOf(r.student))}</td><td>${escapeHtml(sex(r.student))}</td><td>${r.absent?"—":r.written}</td><td>${r.absent?"—":r.ife}</td><td>${r.absent?"—":r.total}</td><td><span class="badge ${result==="PASS"?"pass":"fail"}">${result}</span></td></tr>`;
+  }).join("")||"<tr><td colspan='11'>Generate the result after the marks sheet is locked.</td></tr>";
 }
 function printResult(){printTable("mp_resultBody","MP (SE) 2027 — Result")}
 function printAttendance(){printTable("mp_attendanceBody","MP (SE) 2027 — Attendance")}
