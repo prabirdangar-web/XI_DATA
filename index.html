@@ -316,6 +316,16 @@ tr:hover td{background:#f8fafc}
   </div>
 
   <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h3 style="margin:0">Attendance Summary — Subject-wise (saved attendance)</h3>
+      <button class="btn secondary" style="padding:6px 10px" onclick="loadXiDashAtt()">🔄 Refresh</button>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Subject</th><th>Date</th><th>Enrolled</th><th>Present</th><th>Absent</th><th>Boys P/A</th><th>Girls P/A</th><th>% Pres.</th><th>Status</th></tr></thead>
+    <tbody id="xdBody"><tr><td colspan="9">Loading…</td></tr></tbody></table></div>
+    <div id="xdNote" style="font-size:12px;color:#64748b;margin-top:8px"></div>
+  </div>
+
+  <div class="panel">
     <h3>System Status</h3>
     <div id="dashboardStatus">Loading...</div>
   </div>
@@ -672,6 +682,16 @@ tr:hover td{background:#f8fafc}
     <div class="card"><div class="label">Marks Records</div><div class="value orange" id="mp_dashMarks">0</div></div>
     <div class="card"><div class="label">Locked Results</div><div class="value purple" id="mp_dashResults">0</div></div>
   </div>
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h3 style="margin:0">Attendance Summary — Subject-wise (saved attendance)</h3>
+      <button class="btn secondary" style="padding:6px 10px" onclick="MP.loadDashAtt()">🔄 Refresh</button>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Subject</th><th>Date</th><th>Enrolled</th><th>Present</th><th>Absent</th><th>Boys P/A</th><th>Girls P/A</th><th>% Pres.</th><th>Status</th></tr></thead>
+    <tbody id="mdBody"><tr><td colspan="9">Loading…</td></tr></tbody></table></div>
+    <div id="mdNote" style="font-size:12px;color:#64748b;margin-top:8px"></div>
+  </div>
+
   <div class="panel">
     <h3>Workflow</h3>
     <div class="quick">
@@ -1515,7 +1535,7 @@ async function lockAttendance(){
       return true;
     });
     if(!ok){ attendanceLocked=true; updateAttendanceLockUI(); renderAttendance(); alert("Already locked by another user. Only Admin can unlock."); return; }
-    attendanceLocked=true; attendanceLockInfo=currentUser?.email||""; updateAttendanceLockUI(); renderAttendance(); alert("Attendance submitted and locked.");
+    attendanceLocked=true; attendanceLockInfo=currentUser?.email||""; updateAttendanceLockUI(); renderAttendance(); alert("Attendance submitted and locked."); loadXiDashAtt();
   }catch(e){alert("Lock failed: "+e.message);}
 }
 async function unlockAttendance(){
@@ -2272,6 +2292,17 @@ const AttSum={
     box.textContent=((pending||draft)?"⚠ ":"✅ ")+`${R.filter(r=>r.state==="LOCKED").length} locked, ${draft} draft, ${pending} not recorded.`+(note?" "+note:"");
     document.getElementById(p+"Abs").innerHTML=res.abs.length?res.abs.map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee"><b>${escapeHtml(a.name)}</b> (${escapeHtml(a.date||"")}) — ${a.list.length} absent<br><span style="font-size:12px;color:#475569">${a.list.map(escapeHtml).join("; ")}</span></div>`).join(""):"No absentees recorded.";
   },
+  renderDash(p,res){
+    const saved=res.rows.filter(r=>r.state!=="NONE"),pend=res.rows.filter(r=>r.state==="NONE");
+    const body=document.getElementById(p+"Body"),note=document.getElementById(p+"Note");
+    if(!body)return;
+    const sum=k=>saved.reduce((a,r)=>a+(r[k]||0),0);
+    const rec=sum("recorded"),pr=sum("present");
+    body.innerHTML=saved.length?saved.map(r=>`<tr><td style="text-align:left"><b>${escapeHtml(r.name)}</b></td><td>${escapeHtml(r.date||"")}</td><td>${r.enrolled}</td><td>${r.present}</td><td style="color:#b91c1c"><b>${r.absent}</b></td><td>${r.bp}/${r.ba}</td><td>${r.gp}/${r.ga}</td><td>${r.pct.toFixed(1)}</td><td><span class="badge ${r.state==="LOCKED"?"pass":"absent"}">${r.state}</span></td></tr>`).join("")+
+      `<tr style="background:#f1f5f9;font-weight:700"><td style="text-align:left">TOTAL</td><td></td><td>${sum("enrolled")}</td><td>${pr}</td><td>${sum("absent")}</td><td>${sum("bp")}/${sum("ba")}</td><td>${sum("gp")}/${sum("ga")}</td><td>${rec?(pr/rec*100).toFixed(1):"0.0"}</td><td></td></tr>`
+      :"<tr><td colspan='9'>No attendance saved yet.</td></tr>";
+    note.textContent=pend.length?"Not yet recorded: "+pend.map(r=>r.name).join(", "):(saved.length?"Attendance recorded for all subjects.":"");
+  },
   print(p){
     const res=this.data[p];if(!res){alert("Load the summary first.");return}
     const t=document.getElementById(p+"Table").outerHTML;
@@ -2293,6 +2324,16 @@ const AttSum={
     XLSX.writeFile(wb,(p==="xas"?"XI":"X_MP")+"_Attendance_Summary.xlsx");
   }
 };
+async function loadXiDashAtt(){
+  if(typeof canAttendance!=="function"||!canAttendance())return;
+  try{
+    const snap=await db.collection("xiAttendance").get();
+    const subs=ATTENDANCE_SUBJECTS.map(c=>({code:c,name:c,date:EXAM_SCHEDULE[c]||"",enrolled:students.filter(st=>studentTakesSubject(st,c)).length}));
+    const res=AttSum.build(snap.docs,subs,getStudentSex,st=>`${getStudentReg(st)||getStudentRoll(st)} — ${getStudentName(st)}`);
+    AttSum.renderDash("xd",res);
+    const a=document.getElementById("dashAttendance");if(a)a.textContent=snap.size;
+  }catch(e){const b=document.getElementById("xdBody");if(b)b.innerHTML="<tr><td colspan='9'>Could not load: "+escapeHtml(e.message)+"</td></tr>"}
+}
 async function loadXiAttSummary(){
   if(!canAttendance()){alert("Not permitted.");return}
   const box=document.getElementById("xasBox");box.className="lockbox";box.textContent="Loading from database…";
@@ -2309,7 +2350,9 @@ function updateDashboard(){
   document.getElementById("dashStudents").textContent=students.length;
   document.getElementById("dashSubjects").textContent=SUBJECTS.length;
   renderSubjectCounts();
+  loadXiDashAtt();
 }
+auth.onAuthStateChanged(u=>{ if(u) setTimeout(loadXiDashAtt,1500); });
 
 async function updateAnalysis(){
   document.getElementById("analysisStudents").textContent=students.length;
@@ -2625,7 +2668,7 @@ async function lockAttendance(){
   try{
     const ok=await db.runTransaction(async tx=>{const s=await tx.get(ref);if(s.exists&&s.data().locked)return false;tx.set(ref,{exam:currentExam,subject,date:PROGRAMME[subject].date,rows:attendanceRows,locked:true,lockedBy:currentUser.uid,lockedByName:currentUser.email||"",lockedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});return true});
     if(!ok)return alert("Already locked.");
-    attendanceLocked=true;attendanceLockInfo=currentUser.email||"";updateAttendanceLockUI();renderAttendance();alert("Attendance submitted and locked.");
+    attendanceLocked=true;attendanceLockInfo=currentUser.email||"";updateAttendanceLockUI();renderAttendance();alert("Attendance submitted and locked.");updateDashboard();
   }catch(e){alert("Lock failed: "+e.message)}
 }
 async function unlockAttendance(){
@@ -2737,6 +2780,7 @@ async function updateDashboard(){
     document.getElementById("mp_dashMarks").textContent=m.size;
     document.getElementById("mp_dashResults").textContent=m.docs.filter(d=>d.data().locked).length;
   }catch(e){}
+  loadDashAtt();
 }
 async function updateAnalysis(){
   document.getElementById("mp_analysisStudents").textContent=students.length;
@@ -2872,6 +2916,15 @@ function exportTabulation(){
   XLSX.writeFile(wb,"MP_SE_2027_Tabulation_Rank.xlsx");
 }
 
+async function loadDashAtt(){
+  if(!canAttendance())return;
+  try{
+    const snap=await db.collection("mpAttendance").get();
+    const subs=SUBJECTS.map(c=>({code:c,name:PROGRAMME[c].name,date:PROGRAMME[c].date,enrolled:students.filter(st=>takesSubject(st,c)).length}));
+    const res=AttSum.build(snap.docs,subs,st=>normSex(sex(st)),st=>`${reg(st)||roll(st)} — ${nameOf(st)}`);
+    AttSum.renderDash("md",res);
+  }catch(e){const b=document.getElementById("mdBody");if(b)b.innerHTML="<tr><td colspan='9'>Could not load: "+escapeHtml(e.message)+"</td></tr>"}
+}
 async function loadAttSummary(){
   if(!canAttendance())return alert("Not permitted.");
   const box=document.getElementById("masBox");box.className="lockbox";box.textContent="Loading from database…";
@@ -2883,7 +2936,7 @@ async function loadAttSummary(){
   }catch(e){box.textContent="Could not load: "+e.message}
 }
 
-window.MP={loadAttSummary,showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult,generateTabulation,renderTabulation,printTabulation,exportTabulation};
+window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult,generateTabulation,renderTabulation,printTabulation,exportTabulation};
 })();
 </script>
 </body>
