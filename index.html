@@ -229,6 +229,7 @@ tr:hover td{background:#f8fafc}
     <button onclick="showView('attendance',this)">📅 Attendance</button>
     <button onclick="showView('marks',this)">📝 Marks Entry</button>
     <button onclick="showView('combined',this)">🧮 Combined Result (FM-100)</button>
+    <button onclick="showView('xitab',this)">📋 Tabulation &amp; Rank (XI)</button>
     <button onclick="showView('analysis',this)">📊 Result Analysis</button>
     <button id="navSubjects" style="display:none" onclick="showView('subjects',this)">⚙️ Subjects (Admin)</button>
     <button onclick="showView('rules',this)">📚 WBCHSE Rules</button>
@@ -545,6 +546,34 @@ tr:hover td{background:#f8fafc}
       </table>
     </div>
   </div>
+</section>
+
+<!-- XI TABULATION & RANK -->
+<section id="xitab" class="view">
+  <div class="title">Class XI — Tabulation Sheet &amp; Rank-wise Report</div>
+  <div class="subtitle">All subjects, Semester I / Semester II / Combined. Uses locked marks sheets only.</div>
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field"><label>Report</label>
+        <select id="xtMode" onchange="generateXiTab()">
+          <option value="SEM1">Semester I</option>
+          <option value="SEM2">Semester II</option>
+          <option value="COMB">Combined (Sem I + Sem II + Project/Practical)</option>
+        </select></div>
+      <div class="field"><label>Sex</label>
+        <select id="xtSex" onchange="renderXiTab()"><option value="ALL">All</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+      <div class="field"><label>Order</label>
+        <select id="xtSort" onchange="renderXiTab()"><option value="rank">Rank-wise</option><option value="roll">Roll / Reg-wise</option></select></div>
+      <div class="field"><label>Columns</label>
+        <select id="xtDetail" onchange="renderXiTab()"><option value="total">Subject Total only</option><option value="full">Component-wise</option></select></div>
+      <div class="field" style="flex:1;min-width:200px"><label>Registration No. / Name</label><input id="xtSearch" placeholder="Registration No. / Name" oninput="renderXiTab()"></div>
+      <button class="btn" onclick="generateXiTab()">Generate</button>
+      <button class="btn secondary" onclick="printXiTab()">Print</button>
+      <button class="btn success" onclick="exportXiTab()">Excel</button>
+    </div>
+    <div id="xtBox" class="lockbox">Click Generate to build the tabulation sheet.</div>
+  </div>
+  <div class="panel"><div class="tablewrap"><table id="xtTable"><thead id="xtHead"></thead><tbody id="xtBody"><tr><td>Click Generate.</td></tr></tbody></table></div></div>
 </section>
 
 <!-- ANALYSIS -->
@@ -940,6 +969,7 @@ function showView(id,btn){
   if(id==="subjects" && !isAdmin()){ alert("Only Admin can manage subjects."); return; }
   if(id==="marks" && !canMarks()){ alert("Marks Entry is restricted to authorised Staff/Teacher/Admin accounts."); return; }
   if(id==="combined" && !canResult()){ alert("Combined Result is restricted to authorised Staff/Teacher/Admin accounts."); return; }
+  if(id==="xitab" && !canResult()){ alert("Tabulation is restricted to authorised Staff/Teacher/Admin accounts."); return; }
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 
@@ -1228,8 +1258,9 @@ function printStudents(){
 }
 
 /* ATTENDANCE */
+function xiNormSex(v){const t=String(v||"").toLowerCase().replace(/[^a-z0-9]/g,"");if(["m","male","boy","boys","b"].includes(t))return"Male";if(["f","female","girl","girls","g"].includes(t))return"Female";return String(v||"").trim()}
 function getStudentSex(student){
-  return String(findStudentValue(student,["gender","Gender","GENDER","sex","Sex","SEX"])||"").trim();
+  return xiNormSex(findStudentValue(student,["gender","Gender","GENDER","sex","Sex","SEX"]));
 }
 function getStudentReg(student){
   return findStudentValue(student,["registration","Registration","REGISTRATION","Registration No","Registration No.","Reg No","Reg No."]);
@@ -2015,6 +2046,158 @@ function printCombined(){
   if(!subject){ alert("Select a subject first."); return; }
   if(!combinedRows.length){ alert("Generate the combined result first."); return; }
   printElement("combinedBody",`COMBINED RESULT — FULL MARKS 100 | ${subject}`);
+}
+
+/* ===== CLASS XI TABULATION + RANK (Sem I / Sem II / Combined) ===== */
+let xtRows=[],xtCols=[],xtPending=[],xtModeUsed="SEM1";
+const XT_LABEL={SEM1:"SEMESTER I",SEM2:"SEMESTER II",COMB:"COMBINED (SEM I + SEM II + PROJECT/PRACTICAL)"};
+function xtPassMin(max){return Math.ceil(max*0.30)}
+async function generateXiTab(){
+  if(!requireResult()) return;
+  if(!students.length){ alert("Please import/load XI-REG students first."); return; }
+  const mode=document.getElementById("xtMode").value; xtModeUsed=mode;
+  const box=document.getElementById("xtBox"); box.className="lockbox"; box.textContent="Loading marks…";
+  const subs=SUBJECTS.filter(c=>SCHEMES[c] && subjectColumnExistsInData(c) && students.some(st=>studentTakesSubject(st,c)));
+  if(!subs.length){ box.textContent="Could not determine subject enrolment from the imported XI-REG data."; return; }
+  const exams=mode==="SEM1"?["SEM1"]:mode==="SEM2"?["SEM2"]:["SEM1","SEM2"];
+  const data={}; xtPending=[];
+  try{
+    const jobs=[]; subs.forEach(c=>exams.forEach(e=>jobs.push([c,e])));
+    const snaps=await Promise.all(jobs.map(([c,e])=>db.collection("xiMarks").doc(`${e}_${c}`).get()));
+    jobs.forEach(([c,e],i)=>{
+      const d=snaps[i]; data[c]=data[c]||{};
+      if(d.exists && d.data().locked){ const m={}; (d.data().rows||[]).forEach(r=>m[studentKey(r.student)]=r); data[c][e]=m; }
+      else{ data[c][e]=null; xtPending.push(`${c} ${e==="SEM1"?"Sem I":"Sem II"}`); }
+    });
+  }catch(err){ box.textContent="Could not load marks: "+err.message; return; }
+  xtCols=subs;
+  xtRows=students.map(st=>{
+    const k=studentKey(st); let total=0,fm=0,fail=0,abs=0,missing=0,n=0;
+    const cells=subs.map(c=>{
+      if(!studentTakesSubject(st,c)) return {state:"N"};
+      const sc=SCHEMES[c], th=sc.theory, cm=sc.practical||sc.project;
+      n++;
+      const get=e=>data[c][e]===null?undefined:(data[c][e][k]||null);
+      const isBlank=v=>v===""||v===undefined||v===null;
+      if(mode==="SEM1"){
+        fm+=th; const m=data[c].SEM1; if(m===null){missing++;return{state:"P"}}
+        const r=m[k]; if(!r){missing++;return{state:"P"}}
+        if(isBlank(r.theory)){abs++;return{state:"A"}}
+        const t=Number(r.theory)||0; total+=t; if(t<xtPassMin(th))fail++;
+        return{state:"M",parts:[t],t,fm:th};
+      }
+      if(mode==="SEM2"){
+        fm+=th+cm; const m=data[c].SEM2; if(m===null){missing++;return{state:"P"}}
+        const r=m[k]; if(!r){missing++;return{state:"P"}}
+        if(isBlank(r.theory)&&isBlank(r.component)){abs++;return{state:"A"}}
+        const a=Number(r.theory)||0,b=Number(r.component)||0,t=a+b; total+=t;
+        if(a<xtPassMin(th)||b<xtPassMin(cm))fail++;
+        return{state:"M",parts:[a,b],t,fm:th+cm};
+      }
+      fm+=th*2+cm; const m1=data[c].SEM1,m2=data[c].SEM2;
+      if(m1===null||m2===null){missing++;return{state:"P"}}
+      const r1=m1[k],r2=m2[k]; if(!r1||!r2){missing++;return{state:"P"}}
+      if(isBlank(r1.theory)&&isBlank(r2.theory)&&isBlank(r2.component)){abs++;return{state:"A"}}
+      const a=Number(r1.theory)||0,b=Number(r2.theory)||0,x=Number(r2.component)||0,t=a+b+x; total+=t;
+      if(a<xtPassMin(th)||b<xtPassMin(th)||x<xtPassMin(cm))fail++;
+      return{state:"M",parts:[a,b,x],t,fm:th*2+cm};
+    });
+    const result=missing?"INCOMPLETE":fail?"FAIL":abs?"ABSENT":"PASS";
+    return{student:st,cells,total,fm,pct:fm?total/fm*100:0,fail,abs,missing,result};
+  });
+  const sorted=[...xtRows].sort((a,b)=>b.total-a.total);
+  sorted.forEach((r,i)=>{ r.rank=(i>0&&r.total===sorted[i-1].total)?sorted[i-1].rank:i+1; });
+  if(xtPending.length){
+    box.className="lockbox";
+    box.textContent="⚠ PROVISIONAL — marks not yet locked for: "+[...new Set(xtPending)].join(", ")+". Ranks will change once all are locked.";
+  }else{
+    box.className="lockbox ok"; box.textContent="✅ All required marks sheets are locked — "+XT_LABEL[mode]+". Rank is on grand total (ties share the same rank).";
+  }
+  renderXiTab();
+}
+function xtSubLabels(){
+  const m=xtModeUsed;
+  return xtCols.map(c=>{
+    const sc=SCHEMES[c], cl=sc.practical?"Pr":"Pj";
+    return m==="SEM1"?["Th"]:m==="SEM2"?["Th",cl,"Tot"]:["S1",("S2"),cl,"Tot"];
+  });
+}
+function xtFiltered(){
+  const q=(document.getElementById("xtSearch").value||"").toLowerCase().trim(),
+        sx=document.getElementById("xtSex").value, so=document.getElementById("xtSort").value;
+  const rows=xtRows.filter(r=>{
+    const s=r.student;
+    return (sx==="ALL"||getStudentSex(s).toLowerCase()===sx.toLowerCase()) &&
+      (!q||String(getStudentReg(s)||"").toLowerCase().includes(q)||String(getStudentName(s)||"").toLowerCase().includes(q));
+  });
+  const rn=s=>Number(getStudentRoll(s))||0;
+  rows.sort(so==="rank"?(a,b)=>a.rank-b.rank||rn(a.student)-rn(b.student)
+                       :(a,b)=>rn(a.student)-rn(b.student)||String(getStudentReg(a.student)).localeCompare(String(getStudentReg(b.student))));
+  return rows;
+}
+function renderXiTab(){
+  const head=document.getElementById("xtHead"),body=document.getElementById("xtBody");
+  if(!xtRows.length){ head.innerHTML=""; body.innerHTML="<tr><td>Click Generate.</td></tr>"; return; }
+  const full=document.getElementById("xtDetail").value==="full" && xtModeUsed!=="SEM1";
+  const labels=xtSubLabels();
+  const base=["SL","Rank","Registration No.","Name","Sex"];
+  const tail=["Grand Total","Full Marks","%","Result"];
+  if(full){
+    const sub=xtCols.map((c,i)=>{const l=labels[i].slice(); if(xtModeUsed==="SEM2") return l; return l;});
+    head.innerHTML="<tr>"+base.map(h=>`<th rowspan="2">${h}</th>`).join("")+
+      xtCols.map((c,i)=>`<th colspan="${sub[i].length}">${escapeHtml(c)}</th>`).join("")+
+      tail.map(h=>`<th rowspan="2">${h}</th>`).join("")+"</tr><tr>"+
+      sub.map(l=>l.map(x=>`<th>${x}</th>`).join("")).join("")+"</tr>";
+  }else{
+    head.innerHTML="<tr>"+base.map(h=>`<th>${h}</th>`).join("")+xtCols.map(c=>`<th>${escapeHtml(c)}</th>`).join("")+tail.map(h=>`<th>${h}</th>`).join("")+"</tr>";
+  }
+  const rows=xtFiltered();
+  body.innerHTML=rows.length?rows.map((r,i)=>{
+    const s=r.student;
+    const cells=r.cells.map((c,ci)=>{
+      const n=full?labels[ci].length:1;
+      if(c.state==="N") return `<td colspan="${n}" style="color:#94a3b8">·</td>`;
+      if(c.state==="P") return `<td colspan="${n}">—</td>`;
+      if(c.state==="A") return `<td colspan="${n}" style="color:#b91c1c"><b>AB</b></td>`;
+      const sc=SCHEMES[xtCols[ci]];
+      const bad=c.t<xtPassMin(c.fm)?' style="color:#b91c1c;font-weight:700"':"";
+      if(!full) return `<td${bad}>${c.t}</td>`;
+      const parts=xtModeUsed==="SEM2"?[...c.parts,c.t]:xtModeUsed==="COMB"?[...c.parts,c.t]:[c.t];
+      return parts.map((v,k)=>`<td${k===parts.length-1?bad:""}>${v}</td>`).join("");
+    }).join("");
+    const cls=r.result==="PASS"?"pass":(r.result==="INCOMPLETE"?"absent":"fail");
+    return `<tr><td>${i+1}</td><td><b>${r.rank}</b></td><td>${escapeHtml(getStudentReg(s))}</td><td style="text-align:left;white-space:nowrap">${escapeHtml(getStudentName(s))}</td><td>${escapeHtml(getStudentSex(s))}</td>${cells}<td><b>${r.total}</b></td><td>${r.fm}</td><td>${r.pct.toFixed(2)}</td><td><span class="badge ${cls}">${r.result}</span></td></tr>`;
+  }).join(""):"<tr><td colspan='30'>No students match the filter.</td></tr>";
+}
+function printXiTab(){
+  if(!xtRows.length){ alert("Generate the tabulation sheet first."); return; }
+  const t=document.getElementById("xtTable").cloneNode(true);
+  const so=document.getElementById("xtSort").value==="rank"?"Rank-wise":"Roll-wise";
+  const sx=document.getElementById("xtSex").value;
+  const note=xtPending.length?`<p style="text-align:center;color:#b91c1c;font-size:11px">PROVISIONAL — pending: ${[...new Set(xtPending)].map(escapeHtml).join(", ")}</p>`:"";
+  const w=window.open("","_blank");
+  w.document.write(`<html><head><title>Class XI Tabulation</title><style>@page{size:A4 landscape;margin:8mm}body{font-family:Arial;padding:8px}h2,h3{text-align:center;margin:3px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:3px 4px;font-size:9px;text-align:center}th{background:#eee}.badge{font-weight:700}</style></head><body><h2>TALDANGRA FULMATI HIGH SCHOOL [H.S.]</h2><h3>CLASS XI — ${XT_LABEL[xtModeUsed]} — TABULATION SHEET (${so})</h3><p style="text-align:center;font-size:11px">Sex: ${escapeHtml(sx)} | Th = Theory, Pr = Practical, Pj = Project, AB = Absent, · = subject not taken</p>${note}${t.outerHTML}</body></html>`);
+  w.document.close(); w.print();
+}
+function exportXiTab(){
+  if(!xtRows.length){ alert("Generate the tabulation sheet first."); return; }
+  const rows=xtFiltered(), labels=xtSubLabels();
+  const hdr=["SL","Rank","Registration No.","Name","Sex"];
+  xtCols.forEach((c,i)=>{ const l=xtModeUsed==="SEM1"?["Total"]:xtModeUsed==="SEM2"?["Theory",SCHEMES[c].practical?"Practical":"Project","Total"]:["Sem I","Sem II",SCHEMES[c].practical?"Practical":"Project","Total"]; l.forEach(x=>hdr.push(c+" "+x)); });
+  hdr.push("Grand Total","Full Marks","%","Result");
+  const aoa=[hdr];
+  rows.forEach((r,i)=>{
+    const s=r.student, line=[i+1,r.rank,getStudentReg(s),getStudentName(s),getStudentSex(s)];
+    r.cells.forEach((c,ci)=>{
+      const n=xtModeUsed==="SEM1"?1:xtModeUsed==="SEM2"?3:4;
+      if(c.state==="M") line.push(...(xtModeUsed==="SEM1"?[c.t]:[...c.parts,c.t]));
+      else{ const x=c.state==="A"?"AB":c.state==="N"?"":"—"; for(let k=0;k<n;k++) line.push(x); }
+    });
+    line.push(r.total,r.fm,Number(r.pct.toFixed(2)),r.result); aoa.push(line);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa), wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Tabulation");
+  XLSX.writeFile(wb,"XI_"+xtModeUsed+"_Tabulation_Rank.xlsx");
 }
 
 /* DASHBOARD */
