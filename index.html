@@ -240,6 +240,7 @@ tr:hover td{background:#f8fafc}
     <button data-mpview="mp_attendance" onclick="MP.showView('mp_attendance',this)">📅 Attendance</button>
     <button data-mpview="mp_marks" onclick="MP.showView('mp_marks',this)">📝 Marks Entry</button>
     <button data-mpview="mp_result" onclick="MP.showView('mp_result',this)">🏆 Result</button>
+    <button data-mpview="mp_tabulation" onclick="MP.showView('mp_tabulation',this)">📋 Tabulation &amp; Rank</button>
     <button data-mpview="mp_analysis" onclick="MP.showView('mp_analysis',this)">📊 Analysis</button>
     <button data-mpview="mp_programme" style="display:none" onclick="MP.showView('mp_programme',this)">⚙️ Programme (Admin)</button>
   </div>
@@ -718,6 +719,25 @@ tr:hover td{background:#f8fafc}
     <div id="mp_resultLockBox" class="lockbox">Select a subject.</div>
   </div>
   <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Written</th><th>IFE</th><th>Total</th><th>Result</th></tr></thead><tbody id="mp_resultBody"></tbody></table></div></div>
+</section>
+
+<section id="mp_tabulation" class="view">
+  <div class="title">Tabulation Sheet &amp; Rank-wise Report</div>
+  <div class="subtitle">All subjects — Written 90 + IFE 10 = 100 each. Uses locked marks sheets only.</div>
+  <div class="panel">
+    <div class="toolbar">
+      <div class="field"><label>Section</label><select id="mp_tabSec" onchange="MP.renderTabulation()"><option>ALL</option></select></div>
+      <div class="field"><label>Sex</label><select id="mp_tabSex" onchange="MP.renderTabulation()"><option>ALL</option><option>Male</option><option>Female</option></select></div>
+      <div class="field"><label>Order</label><select id="mp_tabSort" onchange="MP.renderTabulation()"><option value="rank">Rank-wise</option><option value="roll">Section / Roll-wise</option></select></div>
+      <div class="field"><label>Columns</label><select id="mp_tabDetail" onchange="MP.renderTabulation()"><option value="total">Subject Total only</option><option value="full">Written + IFE + Total</option></select></div>
+      <div class="field" style="flex:1"><label>Search</label><input id="mp_tabSearch" placeholder="B.S. Portal ID / Roll / Name" oninput="MP.renderTabulation()"></div>
+      <button class="btn" onclick="MP.generateTabulation()">Generate</button>
+      <button class="btn secondary" onclick="MP.printTabulation()">Print</button>
+      <button class="btn success" onclick="MP.exportTabulation()">Excel</button>
+    </div>
+    <div id="mp_tabBox" class="lockbox">Click Generate to build the tabulation sheet.</div>
+  </div>
+  <div class="panel"><div class="tablewrap"><table id="mp_tabTable"><thead id="mp_tabHead"></thead><tbody id="mp_tabBody"><tr><td>Click Generate.</td></tr></tbody></table></div></div>
 </section>
 
 <section id="mp_analysis" class="view">
@@ -2130,7 +2150,8 @@ function cls(s){return val(s,["Class","Class X","Standard"]) || "X"}
 function sec(s){return val(s,["Section","Sec","Section Name"]) || "A"}
 function roll(s){return val(s,["Roll","Roll No","Roll Number"])}
 function nameOf(s){return val(s,["Name","Student Name","Candidate Name"])}
-function sex(s){return val(s,["Sex","Gender"])}
+function normSex(v){const t=normKey(v);if(!t)return"";if(["m","male","boy","boys","b"].includes(t))return"Male";if(["f","female","girl","girls","g"].includes(t))return"Female";return""}
+function sex(s){const r=val(s,["Sex","Gender"]);return normSex(r)||r}
 function keyOf(s){return normalize(reg(s)||roll(s)||nameOf(s))}
 /* 1st Language: Bengali (BNGA) or Santali (SANT) - a student takes only ONE of them. Blank = Bengali. */
 function firstLang(s){const v=normKey(val(s,["1st Language","First Language","1st Lang","Language","Medium","L1"]));return ["sant","santali","santhali"].includes(v)?"SANT":"BNGA"}
@@ -2181,12 +2202,13 @@ async function deleteProgramme(c){
   delete PROGRAMME[c];SUBJECTS=Object.keys(PROGRAMME);
   try{await persistProgramme()}catch(e){PROGRAMME=JSON.parse(bk);SUBJECTS=Object.keys(PROGRAMME);alert("Delete failed: "+e.message);renderProgramme()}
 }
-function setSex(i,v){if(!requireAdmin()){renderStudents();return}students[i]["Sex"]=v;renderStudents()}
+function setSex(i,v){if(!requireAdmin()){renderStudents();return}const st=students[i];Object.keys(st).forEach(k=>{if(["sex","gender"].includes(normKey(k)))st[k]=v});st["Sex"]=v;renderStudents()}
 
 function showView(id,btn){
   if(id==="mp_programme"&&!isAdmin()) return alert("Programme editing is restricted to Admin.");
   if(id==="mp_marks"&&!canMarks()) return alert("Marks Entry is restricted to Staff/Teacher/Admin.");
   if(id==="mp_result"&&!canResult()) return alert("Result is restricted to Staff/Teacher/Admin.");
+  if(id==="mp_tabulation"&&!canResult()) return alert("Tabulation is restricted to Staff/Teacher/Admin.");
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
   document.getElementById(id).classList.add("active");
   document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
@@ -2208,7 +2230,7 @@ populateSubjects();
 function applyMpRoleUI(){
   const show=(id,ok)=>{const el=document.getElementById(id);if(el)el.style.display=ok?"inline-block":"none"};
   show("mp_saveStudentsBtn",isAdmin());show("mp_unlockAttendanceBtn",isAdmin());show("mp_unlockMarksBtn",isAdmin());
-  [["mp_marks",canMarks()],["mp_result",canResult()],["mp_programme",isAdmin()]].forEach(([v,ok])=>{
+  [["mp_marks",canMarks()],["mp_result",canResult()],["mp_tabulation",canResult()],["mp_programme",isAdmin()]].forEach(([v,ok])=>{
     const b=document.querySelector('.nav button[data-mpview="'+v+'"]');if(b)b.style.display=ok?"block":"none"});
   renderStudents();
 }
@@ -2237,7 +2259,7 @@ function importExcel(){
       const wb=XLSX.read(e.target.result,{type:"array"});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
-      students=rows.map((r,i)=>({...r,sl:i+1}));
+      students=rows.map((r,i)=>{const o={...r,sl:i+1};Object.keys(o).forEach(k=>{if(["sex","gender"].includes(normKey(k))){const n=normSex(o[k]);if(n)o[k]=n}});return o});
       renderStudents();updateDashboard();
       alert(`${students.length} Class X students imported.`);
     }catch(err){alert("Excel import error: "+err.message)}
@@ -2256,7 +2278,7 @@ function renderStudents(){
   document.getElementById("mp_studentHead").innerHTML="<tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>1st Language</th>"+(isAdmin()?"<th>Action</th>":"")+"</tr>";
   body.innerHTML=filtered.map((s,i)=>{
     const idx=students.indexOf(s);
-    return `<tr><td>${i+1}</td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(cls(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${isAdmin()?`<select onchange="MP.setSex(${idx},this.value)"><option value=""${/^(m|f)/i.test(sex(s))?"":" selected"}>—</option><option value="Male"${/^m/i.test(sex(s))?" selected":""}>Male</option><option value="Female"${/^f/i.test(sex(s))?" selected":""}>Female</option></select>`:escapeHtml(sex(s))}</td><td>${isAdmin()?`<select onchange="MP.setLang(${idx},this.value)"><option value="BNGA"${firstLang(s)==="BNGA"?" selected":""}>Bengali</option><option value="SANT"${firstLang(s)==="SANT"?" selected":""}>Santali</option></select>`:(firstLang(s)==="SANT"?"Santali":"Bengali")}</td>${isAdmin()?`<td><button class="btn danger" style="padding:6px 9px" onclick="MP.deleteStudent(${idx})">Delete</button></td>`:""}</tr>`;
+    return `<tr><td>${i+1}</td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(cls(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${isAdmin()?`<select onchange="MP.setSex(${idx},this.value)"><option value=""${normSex(sex(s))?"":" selected"}>—</option><option value="Male"${normSex(sex(s))==="Male"?" selected":""}>Male</option><option value="Female"${normSex(sex(s))==="Female"?" selected":""}>Female</option></select>`:escapeHtml(sex(s))}</td><td>${isAdmin()?`<select onchange="MP.setLang(${idx},this.value)"><option value="BNGA"${firstLang(s)==="BNGA"?" selected":""}>Bengali</option><option value="SANT"${firstLang(s)==="SANT"?" selected":""}>Santali</option></select>`:(firstLang(s)==="SANT"?"Santali":"Bengali")}</td>${isAdmin()?`<td><button class="btn danger" style="padding:6px 9px" onclick="MP.deleteStudent(${idx})">Delete</button></td>`:""}</tr>`;
   }).join("")||"<tr><td colspan='9'>No students loaded.</td></tr>";
 }
 function deleteStudent(i){if(!requireAdmin())return;if(confirm("Delete this student?")){students.splice(i,1);students.forEach((s,i)=>s.sl=i+1);renderStudents()}}
@@ -2443,7 +2465,126 @@ async function updateAnalysis(){
   }catch(e){document.getElementById("mp_analysisText").textContent=e.message}
 }
 
-window.MP={showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult};
+/* ---------- TABULATION SHEET + RANK-WISE REPORT (all subjects) ---------- */
+let tabRows=[],tabCols=[],tabPending=[];
+function tabBuildCols(){
+  const cols=[];let lang=false;
+  SUBJECTS.forEach(c=>{
+    if(c==="BNGA"||c==="SANT"){if(!lang){cols.push({code:"LANG",name:"1ST LANGUAGE"});lang=true}}
+    else cols.push({code:c,name:PROGRAMME[c].name});
+  });
+  return cols;
+}
+async function generateTabulation(){
+  if(!canResult())return alert("Result permission required.");
+  if(!students.length)return alert("Load the Class X student database first.");
+  const box=document.getElementById("mp_tabBox");box.className="lockbox";box.textContent="Loading marks…";
+  const maps={};tabPending=[];
+  try{
+    const snaps=await Promise.all(SUBJECTS.map(c=>db.collection("mpMarks").doc(c+"_"+currentExam).get()));
+    SUBJECTS.forEach((c,i)=>{const d=snaps[i];
+      if(d.exists&&d.data().locked){const m={};(d.data().rows||[]).forEach(r=>m[keyOf(r.student)]=r);maps[c]=m}
+      else tabPending.push(c)});
+  }catch(e){box.textContent="Could not load marks: "+e.message;return}
+  tabCols=tabBuildCols();
+  tabRows=students.map(st=>{
+    const k=keyOf(st);let total=0,fail=0,abs=0,missing=0;
+    const cells=tabCols.map(c=>{
+      const code=c.code==="LANG"?firstLang(st):c.code;
+      if(tabPending.includes(code)){missing++;return{state:"P"}}
+      const r=maps[code]&&maps[code][k];
+      if(!r){missing++;return{state:"P"}}
+      if(r.absent){abs++;return{state:"A"}}
+      const w=Number(r.written)||0,f=Number(r.ife)||0,t=w+f;
+      total+=t;if(t<PASS_MARK)fail++;
+      return{state:"M",w,f,t};
+    });
+    const fm=tabCols.length*100;
+    let result=missing?"INCOMPLETE":fail?"FAIL":abs?"ABSENT":"PASS";
+    return{student:st,cells,total,fm,pct:fm?total/fm*100:0,fail,abs,missing,result};
+  });
+  // competition ranking on grand total (ties share a rank)
+  const sorted=[...tabRows].sort((a,b)=>b.total-a.total);
+  sorted.forEach((r,i)=>{r.rank=(i>0&&r.total===sorted[i-1].total)?sorted[i-1].rank:i+1});
+  const secs=[...new Set(students.map(s=>String(sec(s))))].sort();
+  const sel=document.getElementById("mp_tabSec"),cur=sel.value;
+  sel.innerHTML='<option>ALL</option>'+secs.map(x=>`<option>${escapeHtml(x)}</option>`).join("");
+  if(secs.includes(cur))sel.value=cur;
+  if(tabPending.length){
+    box.className="lockbox";
+    box.textContent="⚠ PROVISIONAL — marks not yet locked for: "+tabPending.map(c=>PROGRAMME[c].name).join(", ")+". Ranks will change after all subjects are locked.";
+  }else{
+    box.className="lockbox ok";box.textContent="✅ All subject marks are locked. Full Marks per student = "+(tabCols.length*100)+". Rank is on grand total (ties share the same rank).";
+  }
+  renderTabulation();
+}
+function tabFiltered(){
+  const q=normalize(document.getElementById("mp_tabSearch").value).toLowerCase(),
+        sx=document.getElementById("mp_tabSex").value,sc=document.getElementById("mp_tabSec").value,
+        so=document.getElementById("mp_tabSort").value;
+  const rows=tabRows.filter(r=>{
+    const s=r.student;
+    return (sx==="ALL"||sex(s).toLowerCase()===sx.toLowerCase())&&(sc==="ALL"||String(sec(s))===sc)&&
+      (!q||keyOf(s).toLowerCase().includes(q)||nameOf(s).toLowerCase().includes(q));
+  });
+  const rn=s=>Number(roll(s))||0;
+  rows.sort(so==="rank"?(a,b)=>a.rank-b.rank||String(sec(a.student)).localeCompare(String(sec(b.student)))||rn(a.student)-rn(b.student)
+                       :(a,b)=>String(sec(a.student)).localeCompare(String(sec(b.student)))||rn(a.student)-rn(b.student));
+  return rows;
+}
+function renderTabulation(){
+  const head=document.getElementById("mp_tabHead"),body=document.getElementById("mp_tabBody");
+  if(!tabRows.length){head.innerHTML="";body.innerHTML="<tr><td>Click Generate.</td></tr>";return}
+  const full=document.getElementById("mp_tabDetail").value==="full";
+  const base="<th>SL</th><th>Rank</th><th>B.S. Portal ID</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th>";
+  const tail=(rs)=>`<th ${rs}>Grand Total</th><th ${rs}>%</th><th ${rs}>Result</th>`;
+  if(full){
+    head.innerHTML="<tr>"+base.replace(/<th>/g,'<th rowspan="2">')+tabCols.map(c=>`<th colspan="3">${escapeHtml(c.name)}</th>`).join("")+tail('rowspan="2"')+"</tr>"+
+      "<tr>"+tabCols.map(()=>"<th>W/90</th><th>IFE</th><th>Tot</th>").join("")+"</tr>";
+  }else{
+    head.innerHTML="<tr>"+base+tabCols.map(c=>`<th>${escapeHtml(c.name)}</th>`).join("")+tail("")+"</tr>";
+  }
+  const rows=tabFiltered();
+  body.innerHTML=rows.map((r,i)=>{
+    const s=r.student;
+    const cells=r.cells.map(c=>{
+      if(c.state==="P")return full?'<td>—</td><td>—</td><td>—</td>':"<td>—</td>";
+      if(c.state==="A")return full?'<td colspan="3" style="color:#b91c1c"><b>AB</b></td>':'<td style="color:#b91c1c"><b>AB</b></td>';
+      const bad=c.t<PASS_MARK?' style="color:#b91c1c;font-weight:700"':"";
+      return full?`<td>${c.w}</td><td>${c.f}</td><td${bad}>${c.t}</td>`:`<td${bad}>${c.t}</td>`;
+    }).join("");
+    const cls2=r.result==="PASS"?"pass":(r.result==="INCOMPLETE"?"absent":"fail");
+    return `<tr><td>${i+1}</td><td><b>${r.rank}</b></td><td>${escapeHtml(reg(s))}</td><td>${escapeHtml(sec(s))}</td><td>${escapeHtml(roll(s))}</td><td>${escapeHtml(nameOf(s))}</td><td>${escapeHtml(sex(s))}</td>${cells}<td><b>${r.total}</b></td><td>${r.pct.toFixed(2)}</td><td><span class="badge ${cls2}">${r.result}</span></td></tr>`;
+  }).join("")||"<tr><td colspan='20'>No students match the filter.</td></tr>";
+}
+function printTabulation(){
+  if(!tabRows.length)return alert("Generate the tabulation sheet first.");
+  const t=document.getElementById("mp_tabTable").cloneNode(true);
+  const so=document.getElementById("mp_tabSort").value==="rank"?"Rank-wise":"Roll-wise";
+  const sx=document.getElementById("mp_tabSex").value,sc=document.getElementById("mp_tabSec").value;
+  const note=tabPending.length?`<p style="text-align:center;color:#b91c1c;font-size:11px">PROVISIONAL — pending: ${tabPending.map(c=>escapeHtml(PROGRAMME[c].name)).join(", ")}</p>`:"";
+  const w=window.open("","_blank");
+  w.document.write(`<html><head><title>MP (SE) 2027 — Tabulation</title><style>@page{size:A4 landscape;margin:8mm}body{font-family:Arial;padding:8px}h2,h3{text-align:center;margin:3px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:3px 4px;font-size:9px;text-align:center}td:nth-child(6){text-align:left;white-space:nowrap}th{background:#eee}.badge{font-weight:700}</style></head><body><h2>TALDANGRA FULMATI HIGH SCHOOL [H.S.]</h2><h3>MP (SE) 2027 SELECTION TEST — TABULATION SHEET (${so})</h3><p style="text-align:center;font-size:11px">Class X | Section: ${escapeHtml(sc)} | Sex: ${escapeHtml(sx)} | Full Marks per subject: 100 | Pass Mark: ${PASS_MARK}</p>${note}${t.outerHTML}</body></html>`);
+  w.document.close();w.print();
+}
+function exportTabulation(){
+  if(!tabRows.length)return alert("Generate the tabulation sheet first.");
+  const rows=tabFiltered();
+  const hdr=["SL","Rank","B.S. Portal ID","Sec","Roll","Name","Sex"];
+  tabCols.forEach(c=>hdr.push(c.name+" W/90",c.name+" IFE/10",c.name+" Total"));
+  hdr.push("Grand Total","Full Marks","%","Result");
+  const aoa=[hdr];
+  rows.forEach((r,i)=>{
+    const s=r.student,line=[i+1,r.rank,reg(s),sec(s),roll(s),nameOf(s),sex(s)];
+    r.cells.forEach(c=>{if(c.state==="M")line.push(c.w,c.f,c.t);else{const x=c.state==="A"?"AB":"";line.push(x,x,x)}});
+    line.push(r.total,r.fm,Number(r.pct.toFixed(2)),r.result);aoa.push(line);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa),wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Tabulation");
+  XLSX.writeFile(wb,"MP_SE_2027_Tabulation_Rank.xlsx");
+}
+
+window.MP={showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult,generateTabulation,renderTabulation,printTabulation,exportTabulation};
 })();
 </script>
 </body>
