@@ -227,6 +227,7 @@ tr:hover td{background:#f8fafc}
     <button class="active" onclick="showView('dashboard',this)">🏠 Dashboard</button>
     <button onclick="showView('students',this)">👨‍🎓 Students / Excel</button>
     <button onclick="showView('attendance',this)">📅 Attendance</button>
+    <button onclick="showView('attsummary',this)">🧾 Attendance Summary</button>
     <button onclick="showView('marks',this)">📝 Marks Entry</button>
     <button onclick="showView('combined',this)">🧮 Combined Result (FM-100)</button>
     <button onclick="showView('xitab',this)">📋 Tabulation &amp; Rank (XI)</button>
@@ -239,6 +240,7 @@ tr:hover td{background:#f8fafc}
     <button data-mpview="mp_dashboard" onclick="MP.showView('mp_dashboard',this)">🏠 Dashboard</button>
     <button data-mpview="mp_students" onclick="MP.showView('mp_students',this)">👨‍🎓 Class X Students</button>
     <button data-mpview="mp_attendance" onclick="MP.showView('mp_attendance',this)">📅 Attendance</button>
+    <button data-mpview="mp_attsummary" onclick="MP.showView('mp_attsummary',this)">🧾 Attendance Summary</button>
     <button data-mpview="mp_marks" onclick="MP.showView('mp_marks',this)">📝 Marks Entry</button>
     <button data-mpview="mp_result" onclick="MP.showView('mp_result',this)">🏆 Result</button>
     <button data-mpview="mp_tabulation" onclick="MP.showView('mp_tabulation',this)">📋 Tabulation &amp; Rank</button>
@@ -548,6 +550,21 @@ tr:hover td{background:#f8fafc}
   </div>
 </section>
 
+<section id="attsummary" class="view">
+  <div class="title">Attendance Summary — Subject-wise</div>
+  <div class="subtitle">Class XI — present / absent, boys &amp; girls, lock status for every subject (from database)</div>
+  <div class="panel">
+    <div class="toolbar">
+      <button class="btn" onclick="loadXiAttSummary()">🔄 Load / Refresh from Database</button>
+      <button class="btn secondary" onclick="AttSum.print('xas')">Print</button>
+      <button class="btn success" onclick="AttSum.excel('xas')">Excel</button>
+    </div>
+    <div id="xasBox" class="lockbox">Click Load / Refresh to read attendance from the database.</div>
+  </div>
+  <div class="panel"><div class="tablewrap"><table id="xasTable"><thead><tr><th>SL</th><th>Subject</th><th>Date</th><th>Enrolled</th><th>Recorded</th><th>Present</th><th>Absent</th><th>Boys P</th><th>Boys A</th><th>Girls P</th><th>Girls A</th><th>% Present</th><th>Status</th></tr></thead><tbody id="xasBody"><tr><td colspan="13">Click Load / Refresh.</td></tr></tbody></table></div></div>
+  <div class="panel"><h3>Absentees — subject-wise</h3><div id="xasAbs">—</div></div>
+</section>
+
 <!-- XI TABULATION & RANK -->
 <section id="xitab" class="view">
   <div class="title">Class XI — Tabulation Sheet &amp; Rank-wise Report</div>
@@ -748,6 +765,21 @@ tr:hover td{background:#f8fafc}
     <div id="mp_resultLockBox" class="lockbox">Select a subject.</div>
   </div>
   <div class="panel"><div class="tablewrap"><table><thead><tr><th>SL</th><th>B.S. Portal ID</th><th>Class</th><th>Sec</th><th>Roll</th><th>Name</th><th>Sex</th><th>Written</th><th>IFE</th><th>Total</th><th>Result</th></tr></thead><tbody id="mp_resultBody"></tbody></table></div></div>
+</section>
+
+<section id="mp_attsummary" class="view">
+  <div class="title">Attendance Summary — Subject-wise</div>
+  <div class="subtitle">Class X MP (SE) 2027 — present / absent, boys &amp; girls, lock status for every subject (from database)</div>
+  <div class="panel">
+    <div class="toolbar">
+      <button class="btn" onclick="MP.loadAttSummary()">🔄 Load / Refresh from Database</button>
+      <button class="btn secondary" onclick="AttSum.print('mas')">Print</button>
+      <button class="btn success" onclick="AttSum.excel('mas')">Excel</button>
+    </div>
+    <div id="masBox" class="lockbox">Click Load / Refresh to read attendance from the database.</div>
+  </div>
+  <div class="panel"><div class="tablewrap"><table id="masTable"><thead><tr><th>SL</th><th>Subject</th><th>Date</th><th>Enrolled</th><th>Recorded</th><th>Present</th><th>Absent</th><th>Boys P</th><th>Boys A</th><th>Girls P</th><th>Girls A</th><th>% Present</th><th>Status</th></tr></thead><tbody id="masBody"><tr><td colspan="13">Click Load / Refresh.</td></tr></tbody></table></div></div>
+  <div class="panel"><h3>Absentees — subject-wise</h3><div id="masAbs">—</div></div>
 </section>
 
 <section id="mp_tabulation" class="view">
@@ -969,6 +1001,7 @@ function showView(id,btn){
   if(id==="subjects" && !isAdmin()){ alert("Only Admin can manage subjects."); return; }
   if(id==="marks" && !canMarks()){ alert("Marks Entry is restricted to authorised Staff/Teacher/Admin accounts."); return; }
   if(id==="combined" && !canResult()){ alert("Combined Result is restricted to authorised Staff/Teacher/Admin accounts."); return; }
+  if(id==="attsummary" && !canAttendance()){ alert("Attendance Summary is restricted to authorised accounts."); return; }
   if(id==="xitab" && !canResult()){ alert("Tabulation is restricted to authorised Staff/Teacher/Admin accounts."); return; }
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
   document.getElementById(id).classList.add("active");
@@ -2200,6 +2233,77 @@ function exportXiTab(){
   XLSX.writeFile(wb,"XI_"+xtModeUsed+"_Tabulation_Rank.xlsx");
 }
 
+/* ===== ATTENDANCE SUMMARY (shared by Class XI and Class X) ===== */
+const AttSum={
+  data:{},
+  build(docs,subjects,sexOf,whoOf){
+    const rows=[],abs=[];
+    subjects.forEach(sub=>{
+      const mine=docs.filter(d=>(d.data().subject||d.id.split("_")[0])===sub.code);
+      if(!mine.length){rows.push({name:sub.name,date:sub.date,enrolled:sub.enrolled,state:"NONE"});return}
+      mine.forEach(doc=>{
+        const d=doc.data(),rs=d.rows||[];
+        const pr=rs.filter(r=>r.status!=="A"),ab=rs.filter(r=>r.status==="A");
+        const cnt=(arr,g)=>arr.filter(r=>sexOf(r.student)===g).length;
+        const row={name:sub.name,date:d.date||sub.date,enrolled:sub.enrolled,recorded:rs.length,present:pr.length,absent:ab.length,
+          bp:cnt(pr,"Male"),ba:cnt(ab,"Male"),gp:cnt(pr,"Female"),ga:cnt(ab,"Female"),
+          pct:rs.length?pr.length/rs.length*100:0,state:d.locked?"LOCKED":"DRAFT"};
+        rows.push(row);
+        if(ab.length)abs.push({name:sub.name,date:row.date,list:ab.map(r=>whoOf(r.student))});
+      });
+    });
+    return{rows,abs};
+  },
+  render(p,res,note){
+    this.data[p]=res;
+    const body=document.getElementById(p+"Body");
+    const R=res.rows,sum=k=>R.reduce((a,r)=>a+(r[k]||0),0);
+    const tot={enrolled:sum("enrolled"),recorded:sum("recorded"),present:sum("present"),absent:sum("absent"),bp:sum("bp"),ba:sum("ba"),gp:sum("gp"),ga:sum("ga")};
+    tot.pct=tot.recorded?tot.present/tot.recorded*100:0;
+    res.tot=tot;
+    body.innerHTML=R.map((r,i)=>{
+      if(r.state==="NONE")return `<tr><td>${i+1}</td><td style="text-align:left"><b>${escapeHtml(r.name)}</b></td><td>${escapeHtml(r.date||"")}</td><td>${r.enrolled}</td><td colspan="9" style="color:#94a3b8">No attendance recorded yet</td><td><span class="badge absent">NOT RECORDED</span></td></tr>`;
+      const cls=r.state==="LOCKED"?"pass":"absent";
+      return `<tr><td>${i+1}</td><td style="text-align:left"><b>${escapeHtml(r.name)}</b></td><td>${escapeHtml(r.date||"")}</td><td>${r.enrolled}</td><td>${r.recorded}</td><td>${r.present}</td><td style="color:#b91c1c"><b>${r.absent}</b></td><td>${r.bp}</td><td>${r.ba}</td><td>${r.gp}</td><td>${r.ga}</td><td>${r.pct.toFixed(1)}</td><td><span class="badge ${cls}">${r.state}</span></td></tr>`;
+    }).join("")+`<tr style="background:#f1f5f9;font-weight:700"><td></td><td style="text-align:left">TOTAL</td><td></td><td>${tot.enrolled}</td><td>${tot.recorded}</td><td>${tot.present}</td><td>${tot.absent}</td><td>${tot.bp}</td><td>${tot.ba}</td><td>${tot.gp}</td><td>${tot.ga}</td><td>${tot.pct.toFixed(1)}</td><td></td></tr>`;
+    const box=document.getElementById(p+"Box");
+    const pending=R.filter(r=>r.state==="NONE").length,draft=R.filter(r=>r.state==="DRAFT").length;
+    box.className="lockbox"+((pending||draft)?"":" ok");
+    box.textContent=((pending||draft)?"⚠ ":"✅ ")+`${R.filter(r=>r.state==="LOCKED").length} locked, ${draft} draft, ${pending} not recorded.`+(note?" "+note:"");
+    document.getElementById(p+"Abs").innerHTML=res.abs.length?res.abs.map(a=>`<div style="padding:8px 0;border-bottom:1px solid #eee"><b>${escapeHtml(a.name)}</b> (${escapeHtml(a.date||"")}) — ${a.list.length} absent<br><span style="font-size:12px;color:#475569">${a.list.map(escapeHtml).join("; ")}</span></div>`).join(""):"No absentees recorded.";
+  },
+  print(p){
+    const res=this.data[p];if(!res){alert("Load the summary first.");return}
+    const t=document.getElementById(p+"Table").outerHTML;
+    const ab=res.abs.map(a=>`<p style="font-size:11px"><b>${escapeHtml(a.name)}</b> (${escapeHtml(a.date||"")}) — ${a.list.length} absent: ${a.list.map(escapeHtml).join("; ")}</p>`).join("");
+    const w=window.open("","_blank");
+    w.document.write(`<html><head><title>Attendance Summary</title><style>@page{size:A4 landscape;margin:8mm}body{font-family:Arial;padding:8px}h2,h3{text-align:center;margin:3px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #333;padding:4px;font-size:10px;text-align:center}th{background:#eee}</style></head><body><h2>TALDANGRA FULMATI HIGH SCHOOL [H.S.]</h2><h3>${p==="xas"?"CLASS XI SEMESTER EXAM":"CLASS X — MP (SE) 2027 SELECTION TEST"} — ATTENDANCE SUMMARY (SUBJECT-WISE)</h3>${t}<h4>Absentees</h4>${ab||"<p>No absentees recorded.</p>"}</body></html>`);
+    w.document.close();w.print();
+  },
+  excel(p){
+    const res=this.data[p];if(!res){alert("Load the summary first.");return}
+    const h=["SL","Subject","Date","Enrolled","Recorded","Present","Absent","Boys Present","Boys Absent","Girls Present","Girls Absent","% Present","Status"];
+    const a=[h];
+    res.rows.forEach((r,i)=>a.push(r.state==="NONE"?[i+1,r.name,r.date||"",r.enrolled,"","","","","","","","","NOT RECORDED"]:[i+1,r.name,r.date||"",r.enrolled,r.recorded,r.present,r.absent,r.bp,r.ba,r.gp,r.ga,Number(r.pct.toFixed(1)),r.state]));
+    const t=res.tot;a.push(["","TOTAL","",t.enrolled,t.recorded,t.present,t.absent,t.bp,t.ba,t.gp,t.ga,Number(t.pct.toFixed(1)),""]);
+    const b=[["Subject","Date","Student"]];res.abs.forEach(x=>x.list.forEach(n=>b.push([x.name,x.date||"",n])));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),"Summary");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(b),"Absentees");
+    XLSX.writeFile(wb,(p==="xas"?"XI":"X_MP")+"_Attendance_Summary.xlsx");
+  }
+};
+async function loadXiAttSummary(){
+  if(!canAttendance()){alert("Not permitted.");return}
+  const box=document.getElementById("xasBox");box.className="lockbox";box.textContent="Loading from database…";
+  try{
+    const snap=await db.collection("xiAttendance").get();
+    const subs=ATTENDANCE_SUBJECTS.map(c=>({code:c,name:c,date:EXAM_SCHEDULE[c]||"",enrolled:students.filter(st=>studentTakesSubject(st,c)).length}));
+    const res=AttSum.build(snap.docs,subs,getStudentSex,st=>`${getStudentReg(st)||getStudentRoll(st)} — ${getStudentName(st)}`);
+    AttSum.render("xas",res,students.length?"":"(Student list not loaded — enrolled counts show 0.)");
+  }catch(e){box.textContent="Could not load: "+e.message}
+}
+
 /* DASHBOARD */
 function updateDashboard(){
   document.getElementById("dashStudents").textContent=students.length;
@@ -2391,6 +2495,7 @@ function showView(id,btn){
   if(id==="mp_programme"&&!isAdmin()) return alert("Programme editing is restricted to Admin.");
   if(id==="mp_marks"&&!canMarks()) return alert("Marks Entry is restricted to Staff/Teacher/Admin.");
   if(id==="mp_result"&&!canResult()) return alert("Result is restricted to Staff/Teacher/Admin.");
+  if(id==="mp_attsummary"&&!canAttendance()) return alert("Attendance Summary is restricted to authorised accounts.");
   if(id==="mp_tabulation"&&!canResult()) return alert("Tabulation is restricted to Staff/Teacher/Admin.");
   document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
   document.getElementById(id).classList.add("active");
@@ -2767,7 +2872,18 @@ function exportTabulation(){
   XLSX.writeFile(wb,"MP_SE_2027_Tabulation_Rank.xlsx");
 }
 
-window.MP={showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult,generateTabulation,renderTabulation,printTabulation,exportTabulation};
+async function loadAttSummary(){
+  if(!canAttendance())return alert("Not permitted.");
+  const box=document.getElementById("masBox");box.className="lockbox";box.textContent="Loading from database…";
+  try{
+    const snap=await db.collection("mpAttendance").get();
+    const subs=SUBJECTS.map(c=>({code:c,name:PROGRAMME[c].name,date:PROGRAMME[c].date,enrolled:students.filter(st=>takesSubject(st,c)).length}));
+    const res=AttSum.build(snap.docs,subs,st=>normSex(sex(st)),st=>`${reg(st)||roll(st)} — ${nameOf(st)}`);
+    AttSum.render("mas",res,students.length?"":"(Student list not loaded — enrolled counts show 0.)");
+  }catch(e){box.textContent="Could not load: "+e.message}
+}
+
+window.MP={loadAttSummary,showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult,generateTabulation,renderTabulation,printTabulation,exportTabulation};
 })();
 </script>
 </body>
