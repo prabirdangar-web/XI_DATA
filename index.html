@@ -209,6 +209,15 @@ tr:hover td{background:#f8fafc}
 .program{background:#fff;border:1px solid #cbd5e1;border-radius:14px;overflow:hidden}
 .program img{display:block;width:100%;max-height:430px;object-fit:contain;background:#fff}
 .program-note{padding:12px;text-align:center;font-weight:700;color:#1e3a8a}
+
+/* ---- marks-only link mode (?m=xi|mp&sub=CODE) ---- */
+body.marks-only .sidebar{display:none!important}
+body.marks-only .main{margin-left:0!important;width:100%!important}
+body.marks-only .app{display:block!important}
+body.marks-only .content{padding:14px}
+.ml-panel{margin-top:16px;border-top:1px dashed #cbd5e1;padding-top:12px}
+.ml-panel table td{vertical-align:middle}
+.ml-panel input.ml-url{width:100%;min-width:260px;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px}
 </style>
 </head>
 
@@ -2937,6 +2946,111 @@ async function loadAttSummary(){
 }
 
 window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStudents,renderStudents,deleteStudent,setLang,setSex,editProgramme,deleteProgramme,printStudents,loadAttendance,renderAttendance,setAttendance,markAllAttendance,saveAttendance,lockAttendance,unlockAttendance,printAttendance,loadMarks,renderMarks,setMark,saveMarks,lockMarks,unlockMarks,printMarks,generateResult,renderResult,printResult,generateTabulation,renderTabulation,printTabulation,exportTabulation};
+})();
+</script>
+
+<script>
+/* ===================== MARKS-ONLY LINKS =====================
+   Teacher link formats (same index.html, nothing else to deploy):
+     Class XI :  index.html?m=xi&exam=SEM1&sub=CODE      (exam = SEM1 | SUPP | SEM2)
+     Class X  :  index.html?m=mp&sub=CODE
+   Link only opens the marks screen for ONE subject. Real protection stays the same:
+   staff login + users/{uid}.role + assignedSubjects + Firestore rules. */
+(function(){
+  const P=new URLSearchParams(location.search);
+  const cls=(P.get('m')||'').toLowerCase();
+  const sub=(P.get('sub')||'').trim();
+  const exam=(P.get('exam')||'SEM1').trim().toUpperCase();
+  const base=location.origin+location.pathname;
+  const EXAM_LABEL={SEM1:'Semester I',SUPP:'Semester I Supplementary',SEM2:'Semester II'};
+  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const link=(c,s,e)=>base+'?m='+c+'&sub='+encodeURIComponent(s)+(c==='xi'?'&exam='+encodeURIComponent(e):'');
+
+  /* ---------- Admin: link generator panels ---------- */
+  function addPanel(hostId,c,selId){
+    const host=document.getElementById(hostId); if(!host) return;
+    const box=document.createElement('div'); box.className='panel ml-panel';
+    box.innerHTML='<h3 style="margin:0 0 6px">🔗 Marks Entry Links — send to subject teachers</h3>'+
+      '<div class="subtitle" style="margin-bottom:8px">Each link opens ONLY the marks entry screen of that subject (no other menu). Teacher signs in with own staff login.</div>'+
+      '<div class="toolbar">'+(c==='xi'?'<div class="field"><label>Examination</label><select class="ml-exam"><option value="SEM1">Semester I</option><option value="SUPP">Semester I Supplementary</option><option value="SEM2">Semester II</option></select></div>':'')+
+      '<button class="btn ml-gen">Generate Links</button></div><div class="tablewrap ml-out" style="margin-top:8px"></div>';
+    host.appendChild(box);
+    const gen=()=>{
+      const sel=document.getElementById(selId);
+      const ex=c==='xi'?box.querySelector('.ml-exam').value:'';
+      const opts=[...sel.options].filter(o=>o.value);
+      if(!opts.length){box.querySelector('.ml-out').textContent='No subjects loaded yet.';return;}
+      const rows=opts.map(o=>{
+        const u=link(c,o.value,ex);
+        const label=c==='xi'?o.value:(o.value+' — '+o.textContent);
+        const msg='Marks entry link — '+(c==='xi'?'Class XI '+EXAM_LABEL[ex]:'Class X MP (SE) 2027')+' — '+o.value+'\n'+u+'\nOpen, sign in with your staff email & password, enter marks, Save Draft, then Finalize & Lock.';
+        return '<tr><td><b>'+esc(label)+'</b></td><td><input class="ml-url" readonly value="'+esc(u)+'"></td>'+
+          '<td style="white-space:nowrap"><button class="btn light ml-copy" data-u="'+esc(u)+'">Copy</button> '+
+          '<a class="btn light" style="text-decoration:none;display:inline-block" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent(msg)+'">WhatsApp</a></td></tr>';
+      }).join('');
+      const out=box.querySelector('.ml-out');
+      out.innerHTML='<table><thead><tr><th>Subject</th><th>Link</th><th>Share</th></tr></thead><tbody>'+rows+'</tbody></table>';
+      out.querySelectorAll('.ml-copy').forEach(b=>b.onclick=async()=>{
+        try{await navigator.clipboard.writeText(b.dataset.u);b.textContent='Copied ✔';setTimeout(()=>b.textContent='Copy',1500);}
+        catch(e){prompt('Copy link:',b.dataset.u);}
+      });
+    };
+    box.querySelector('.ml-gen').onclick=gen;
+    const ee=box.querySelector('.ml-exam'); if(ee) ee.onchange=gen;
+  }
+  addPanel('subjects','xi','marksSubject');
+  addPanel('mp_programme','mp','mp_marksSubject');
+
+  /* ---------- Teacher: marks-only mode ---------- */
+  if(!(cls==='xi'||cls==='mp') || !sub) return;
+  document.body.classList.add('marks-only');
+  const viewId=cls==='xi'?'marks':'mp_marks';
+  const selId=cls==='xi'?'marksSubject':'mp_marksSubject';
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const view=document.getElementById(viewId); view.classList.add('active');
+
+  const heading=(cls==='xi'?'Class XI — '+(EXAM_LABEL[exam]||exam):'Class X MP (SE) 2027')+' — '+sub;
+  const tb=document.querySelector('.topbar strong'); if(tb) tb.textContent='TFHS Marks Entry';
+  const ttl=view.querySelector('.title'); if(ttl) ttl.textContent='Marks Entry — '+heading;
+  document.title='Marks Entry — '+heading;
+
+  /* lock subject / exam pickers: this link serves one subject only */
+  const selEl=document.getElementById(selId);
+  if(selEl&&selEl.closest('.field')) selEl.closest('.field').style.display='none';
+  if(cls==='xi'){
+    const ex=document.getElementById('marksExam');
+    if(ex){ex.value=EXAM_LABEL[exam]?exam:'SEM1'; if(ex.closest('.field')) ex.closest('.field').style.display='none';}
+  }
+  const note=document.createElement('div'); note.className='lockbox'; note.style.margin='0 0 10px';
+  const sb=view.querySelector('.subtitle'); (sb||ttl).insertAdjacentElement('afterend',note);
+  note.textContent='Sign in above with your staff email & password to open this subject.';
+
+  let busy=false,loads=0,tries=0,done=false;
+  const t=setInterval(async()=>{
+    if(done||busy) return;
+    if(++tries>600){clearInterval(t);return;}
+    if(typeof canMarks!=='function'||!canMarks()) return;
+    const sel=document.getElementById(selId);
+    const opt=[...sel.options].find(o=>o.value.toUpperCase()===sub.toUpperCase());
+    if(!opt){ if(tries>20) note.textContent='Subject "'+sub+'" not found. Ask the Headmaster for a correct link.'; return; }
+    if(!isAdmin() && !assignedTo('assignedSubjects',opt.value)){
+      note.textContent='Subject '+opt.value+' is not assigned to your account. Ask the Headmaster.'; done=true; clearInterval(t); return;
+    }
+    if(cls==='xi' && !students.length) return;
+    busy=true;
+    try{
+      sel.value=opt.value;
+      note.textContent='Opened: '+heading+' — marks open only after this subject\'s Attendance is Submitted & Locked.';
+      if(cls==='xi'){ if(typeof updateScheme==='function') updateScheme(); await loadMarks(); done=true; }
+      else{
+        await MP.loadMarks(); loads++;
+        const body=document.getElementById('mp_marksBody');
+        if((body&&body.children.length)||loads>=6) done=true;
+      }
+    }catch(e){console.warn(e);}
+    busy=false;
+    if(done) clearInterval(t);
+  },1500);
 })();
 </script>
 </body>
