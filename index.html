@@ -287,6 +287,7 @@ body.marks-only .content{padding:14px}
   <input id="regEmail" type="email" placeholder="Email">
   <input id="regPass" type="password" placeholder="Password (min 6)">
   <input id="regPass2" type="password" placeholder="Confirm password">
+  <div id="regSub" style="flex-basis:100%;font-size:13px;color:#e2e8f0">Subjects you teach: <span id="regSubList"></span></div>
   <button onclick="registerTeacher()" style="background:#16a34a;color:#fff">Submit for Approval</button>
   <span id="regMsg" style="font-size:13px"></span>
 </div>
@@ -3085,12 +3086,28 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
   const sub0=(new URLSearchParams(location.search).get('sub')||'').trim();
   const $=id=>document.getElementById(id);
 
-  window.toggleRegister=function(){const b=$('regBox'); b.style.display=(b.style.display==='none')?'flex':'none';};
+  function fillRegSubjects(){
+    const box=$('regSubList'); if(!box||box.dataset.filled) return;
+    const xi={}, x10={}, names={};
+    try{ Object.keys(SCHEMES||{}).forEach(k=>xi[k]=1); }catch(e){}
+    try{ Object.keys(PROGRAMME||{}).forEach(k=>{x10[k]=1; names[k]=PROGRAMME[k].name;}); }catch(e){}
+    const pre=sub0.split(',').map(v=>v.trim().toUpperCase()).filter(Boolean);
+    pre.forEach(c=>{ if(!xi[c]&&!x10[c]) xi[c]=1; });
+    const codes=[...new Set([...Object.keys(xi),...Object.keys(x10)])].sort();
+    box.innerHTML=codes.map(c=>{
+      const tag=(xi[c]&&x10[c])?'XI + X':(x10[c]?'X':'XI');
+      return '<label style="display:inline-block;margin:3px 12px 3px 0"><input type="checkbox" class="reg-sub" value="'+esc(c)+'"'+(pre.includes(c.toUpperCase())?' checked':'')+'> '+esc(c)+(names[c]?' - '+esc(names[c]):'')+' <small style="opacity:.7">('+tag+')</small></label>';
+    }).join('');
+    box.dataset.filled='1';
+  }
+  window.toggleRegister=function(){const b=$('regBox'); fillRegSubjects(); b.style.display=(b.style.display==='none')?'flex':'none';};
 
   window.registerTeacher=async function(){
     const name=$('regName').value.trim(), email=$('regEmail').value.trim(), p1=$('regPass').value, p2=$('regPass2').value, msg=$('regMsg');
     const signed=auth.currentUser&&!auth.currentUser.isAnonymous;
+    const subReq=[...document.querySelectorAll('.reg-sub:checked')].map(x=>x.value).join(',')||sub0;
     if(!name){msg.textContent='Enter full name.';return;}
+    if(!subReq){msg.textContent='Tick at least one subject you teach.';return;}
     if(!signed){
       if(!email){msg.textContent='Enter email.';return;}
       if(p1.length<6){msg.textContent='Password must be at least 6 characters.';return;}
@@ -3102,7 +3119,7 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
     try{
       let user=auth.currentUser;
       if(!signed){ const cred=await auth.createUserWithEmailAndPassword(email,p1); user=cred.user; }
-      await db.collection('users').doc(user.uid).set({name,email:user.email||email,role:'pending',assignedSubjects:[],requestedSubject:sub0,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      await db.collection('users').doc(user.uid).set({name,email:user.email||email,role:'pending',assignedSubjects:[],requestedSubject:subReq,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
       await loadUserRole(user);
       msg.textContent='Registered. Waiting for Headmaster approval — reopen your link after approval.';
       $('regPass').value='';$('regPass2').value='';
@@ -3149,7 +3166,7 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
       body.innerHTML=list.map(u=>{
         const role=String(u.role||'viewer').toLowerCase();
         const cur=listValue(u.assignedSubjects).map(x=>x.toUpperCase());
-        const pre=(role==='pending'&&u.requestedSubject)?[String(u.requestedSubject).toUpperCase()]:cur;
+        const pre=(role==='pending'&&u.requestedSubject)?String(u.requestedSubject).split(',').map(x=>x.trim().toUpperCase()).filter(Boolean):cur;
         if(role==='admin') return '<tr><td><b>'+esc(u.name||'')+'</b><br><small>'+esc(u.email||u.uid)+'</small></td><td>—</td><td><b>ADMIN</b></td><td>All</td><td>—</td></tr>';
         const roleSel='<select class="st-role">'+['pending','teacher','staff','invigilator','rejected'].map(r=>'<option value="'+r+'"'+(r===role?' selected':'')+'>'+r+'</option>').join('')+(['pending','teacher','staff','invigilator','rejected'].includes(role)?'':'<option value="'+esc(role)+'" selected>'+esc(role)+'</option>')+'</select>';
         const boxes=codes.map(c=>'<label style="display:inline-block;margin:2px 8px 2px 0;font-size:12px"><input type="checkbox" class="st-sub" value="'+esc(c)+'"'+(pre.includes(c.toUpperCase())?' checked':'')+'> '+esc(c)+'</label>').join('');
