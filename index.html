@@ -287,7 +287,7 @@ body.marks-only .content{padding:14px}
   <input id="regEmail" type="email" placeholder="Email">
   <input id="regPass" type="password" placeholder="Password (min 6)">
   <input id="regPass2" type="password" placeholder="Confirm password">
-  <div id="regSub" style="flex-basis:100%;font-size:13px;color:#e2e8f0">Subjects you teach: <span id="regSubList"></span></div>
+  <select id="regSub" title="Your subject"><option value="">Select your subject</option></select>
   <button onclick="registerTeacher()" style="background:#16a34a;color:#fff">Submit for Approval</button>
   <span id="regMsg" style="font-size:13px"></span>
 </div>
@@ -3087,27 +3087,28 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
   const $=id=>document.getElementById(id);
 
   function fillRegSubjects(){
-    const box=$('regSubList'); if(!box||box.dataset.filled) return;
+    const sel=$('regSub'); if(!sel||sel.dataset.filled) return;
     const xi={}, x10={}, names={};
     try{ Object.keys(SCHEMES||{}).forEach(k=>xi[k]=1); }catch(e){}
     try{ Object.keys(PROGRAMME||{}).forEach(k=>{x10[k]=1; names[k]=PROGRAMME[k].name;}); }catch(e){}
-    const pre=sub0.split(',').map(v=>v.trim().toUpperCase()).filter(Boolean);
-    pre.forEach(c=>{ if(!xi[c]&&!x10[c]) xi[c]=1; });
+    const pre=sub0.split(',')[0].trim().toUpperCase();
+    if(pre&&!xi[pre]&&!x10[pre]) xi[pre]=1;
     const codes=[...new Set([...Object.keys(xi),...Object.keys(x10)])].sort();
-    box.innerHTML=codes.map(c=>{
+    sel.innerHTML='<option value="">Select your subject</option>'+codes.map(c=>{
       const tag=(xi[c]&&x10[c])?'XI + X':(x10[c]?'X':'XI');
-      return '<label style="display:inline-block;margin:3px 12px 3px 0"><input type="checkbox" class="reg-sub" value="'+esc(c)+'"'+(pre.includes(c.toUpperCase())?' checked':'')+'> '+esc(c)+(names[c]?' - '+esc(names[c]):'')+' <small style="opacity:.7">('+tag+')</small></label>';
+      return '<option value="'+esc(c)+'">'+esc(c)+(names[c]?' - '+esc(names[c]):'')+' ('+tag+')</option>';
     }).join('');
-    box.dataset.filled='1';
+    if(pre&&codes.includes(pre)) sel.value=pre;
+    sel.dataset.filled='1';
   }
   window.toggleRegister=function(){const b=$('regBox'); fillRegSubjects(); b.style.display=(b.style.display==='none')?'flex':'none';};
 
   window.registerTeacher=async function(){
     const name=$('regName').value.trim(), email=$('regEmail').value.trim(), p1=$('regPass').value, p2=$('regPass2').value, msg=$('regMsg');
     const signed=auth.currentUser&&!auth.currentUser.isAnonymous;
-    const subReq=[...document.querySelectorAll('.reg-sub:checked')].map(x=>x.value).join(',')||sub0;
+    const subReq=(($('regSub')||{}).value||'').trim();
     if(!name){msg.textContent='Enter full name.';return;}
-    if(!subReq){msg.textContent='Tick at least one subject you teach.';return;}
+    if(!subReq){msg.textContent='Select your subject.';return;}
     if(!signed){
       if(!email){msg.textContent='Enter email.';return;}
       if(p1.length<6){msg.textContent='Password must be at least 6 characters.';return;}
