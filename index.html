@@ -242,6 +242,7 @@ body.marks-only .content{padding:14px}
     <button onclick="showView('xitab',this)">📋 Tabulation &amp; Rank (XI)</button>
     <button onclick="showView('analysis',this)">📊 Result Analysis</button>
     <button id="navSubjects" style="display:none" onclick="showView('subjects',this)">⚙️ Subjects (Admin)</button>
+    <button id="navStaff" style="display:none" onclick="showView('staffappr',this)">👥 Staff Approvals (Admin)</button>
     <button onclick="showView('rules',this)">📚 WBCHSE Rules</button>
   </div>
   <div class="nav-group-title" id="ngt-mp" onclick="toggleNavGroup('mp')"><span>CLASS X — MP (SE) 2027</span><i>▾</i></div>
@@ -276,8 +277,18 @@ body.marks-only .content{padding:14px}
   <input id="loginPassword" type="password" placeholder="Password">
   <button onclick="loginUser()">Sign In</button>
   <button onclick="logoutUser()">Sign Out</button>
+  <button id="regBtn" onclick="toggleRegister()" style="background:#16a34a;color:#fff">Register (New Teacher)</button>
   <span class="role-badge" id="roleBadge">VIEWER</span>
   <span id="roleMessage">Read-only until an authorised existing staff/admin account is signed in.</span>
+</div>
+<div id="regBox" class="rolebar" style="display:none;background:#1e293b">
+  <span>Register:</span>
+  <input id="regName" placeholder="Full name">
+  <input id="regEmail" type="email" placeholder="Email">
+  <input id="regPass" type="password" placeholder="Password (min 6)">
+  <input id="regPass2" type="password" placeholder="Confirm password">
+  <button onclick="registerTeacher()" style="background:#16a34a;color:#fff">Submit for Approval</button>
+  <span id="regMsg" style="font-size:13px"></span>
 </div>
 
 <div class="content">
@@ -650,6 +661,17 @@ body.marks-only .content{padding:14px}
     <button class="btn" onclick="editSubject()">➕ Add Subject</button>
     <div class="tablewrap"><table><thead><tr><th>Code</th><th>Theory</th><th>Practical</th><th>Project</th><th>Full Marks</th><th>Exam Date</th><th>Action</th></tr></thead>
     <tbody id="subjectsBody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- STAFF APPROVALS (ADMIN) -->
+<section id="staffappr" class="view">
+  <div class="title">Staff Approvals</div>
+  <div class="subtitle">Admin only — approve self-registered teachers and tick the subjects they may enter marks for.</div>
+  <div class="panel">
+    <div class="toolbar"><button class="btn" onclick="loadStaff()">Refresh</button><span id="staffMsg" style="font-size:13px"></span></div>
+    <div class="tablewrap"><table><thead><tr><th>Name / Email</th><th>Requested</th><th>Role</th><th>Subjects</th><th>Action</th></tr></thead>
+    <tbody id="staffBody"><tr><td colspan="5">Click Refresh.</td></tr></tbody></table></div>
   </div>
 </section>
 
@@ -3023,13 +3045,13 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
   }
   const note=document.createElement('div'); note.className='lockbox'; note.style.margin='0 0 10px';
   const sb=view.querySelector('.subtitle'); (sb||ttl).insertAdjacentElement('afterend',note);
-  note.textContent='Sign in above with your staff email & password to open this subject.';
+  note.textContent='Sign in above with your staff email & password to open this subject. New teacher? Click Register (Headmaster approval needed).';
 
   let busy=false,loads=0,tries=0,done=false;
   const t=setInterval(async()=>{
     if(done||busy) return;
     if(++tries>600){clearInterval(t);return;}
-    if(typeof canMarks!=='function'||!canMarks()) return;
+    if(typeof canMarks!=='function'||!canMarks()){ if(typeof roleIs==='function'&&roleIs('pending')) note.textContent='Registered — waiting for Headmaster approval. Reopen this link after approval.'; return; }
     const sel=document.getElementById(selId);
     const opt=[...sel.options].find(o=>o.value.toUpperCase()===sub.toUpperCase());
     if(!opt){ if(tries>20) note.textContent='Subject "'+sub+'" not found. Ask the Headmaster for a correct link.'; return; }
@@ -3051,6 +3073,102 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
     busy=false;
     if(done) clearInterval(t);
   },1500);
+})();
+</script>
+
+<script>
+/* ===================== SELF-REGISTRATION + ADMIN APPROVAL =====================
+   Teacher registers -> users/{uid} { role:"pending", assignedSubjects:[] }
+   Admin (Staff Approvals) sets role + assignedSubjects. Needs the matching Firestore rules. */
+(function(){
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sub0=(new URLSearchParams(location.search).get('sub')||'').trim();
+  const $=id=>document.getElementById(id);
+
+  window.toggleRegister=function(){const b=$('regBox'); b.style.display=(b.style.display==='none')?'flex':'none';};
+
+  window.registerTeacher=async function(){
+    const name=$('regName').value.trim(), email=$('regEmail').value.trim(), p1=$('regPass').value, p2=$('regPass2').value, msg=$('regMsg');
+    const signed=auth.currentUser&&!auth.currentUser.isAnonymous;
+    if(!name){msg.textContent='Enter full name.';return;}
+    if(!signed){
+      if(!email){msg.textContent='Enter email.';return;}
+      if(p1.length<6){msg.textContent='Password must be at least 6 characters.';return;}
+      if(p1!==p2){msg.textContent='Passwords do not match.';return;}
+    }else if(typeof currentRole!=='undefined'&&currentRole!=='viewer'){
+      msg.textContent='This account is already registered ('+currentRole.toUpperCase()+').';return;
+    }
+    msg.textContent='Registering…';
+    try{
+      let user=auth.currentUser;
+      if(!signed){ const cred=await auth.createUserWithEmailAndPassword(email,p1); user=cred.user; }
+      await db.collection('users').doc(user.uid).set({name,email:user.email||email,role:'pending',assignedSubjects:[],requestedSubject:sub0,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      await loadUserRole(user);
+      msg.textContent='Registered. Waiting for Headmaster approval — reopen your link after approval.';
+      $('regPass').value='';$('regPass2').value='';
+    }catch(e){
+      msg.textContent=(e.code==='auth/email-already-in-use')?'Email already registered — use Sign In.':'Registration failed: '+e.message;
+    }
+  };
+
+  /* role-aware UI */
+  const _apply=applyRoleUI;
+  applyRoleUI=function(){
+    _apply();
+    const m=$('roleMessage');
+    if(m&&roleIs('pending')) m.textContent='Registered — waiting for Headmaster approval. You cannot enter marks yet.';
+    if(m&&roleIs('rejected')) m.textContent='Registration not approved. Contact the Headmaster.';
+    const ns=$('navStaff'); if(ns) ns.style.display=isAdmin()?'block':'none';
+    const rb=$('regBtn'); if(rb) rb.style.display=(currentUser&&!currentUser.isAnonymous&&currentRole!=='viewer')?'none':'inline-block';
+  };
+  applyRoleUI();
+
+  /* admin: Staff Approvals */
+  const _sv=showView;
+  showView=function(id,btn){
+    if(id==='staffappr'&&!isAdmin()){alert('Only Admin can approve staff.');return;}
+    _sv(id,btn);
+    if(id==='staffappr') loadStaff();
+  };
+
+  function allCodes(){
+    const s=new Set();
+    ['marksSubject','mp_marksSubject'].forEach(id=>{const el=$(id); if(el)[...el.options].forEach(o=>{if(o.value)s.add(o.value);});});
+    return [...s];
+  }
+  window.loadStaff=async function(){
+    const body=$('staffBody'), msg=$('staffMsg');
+    if(!isAdmin()){body.innerHTML='<tr><td colspan="5">Admin only.</td></tr>';return;}
+    msg.textContent='Loading…';
+    try{
+      const snap=await db.collection('users').get();
+      const codes=allCodes();
+      const list=snap.docs.map(d=>({uid:d.id,...d.data()}));
+      const rank=r=>r==='pending'?0:(r==='admin'?9:1);
+      list.sort((a,b)=>rank(a.role)-rank(b.role)||String(a.name||a.email||'').localeCompare(String(b.name||b.email||'')));
+      body.innerHTML=list.map(u=>{
+        const role=String(u.role||'viewer').toLowerCase();
+        const cur=listValue(u.assignedSubjects).map(x=>x.toUpperCase());
+        const pre=(role==='pending'&&u.requestedSubject)?[String(u.requestedSubject).toUpperCase()]:cur;
+        if(role==='admin') return '<tr><td><b>'+esc(u.name||'')+'</b><br><small>'+esc(u.email||u.uid)+'</small></td><td>—</td><td><b>ADMIN</b></td><td>All</td><td>—</td></tr>';
+        const roleSel='<select class="st-role">'+['pending','teacher','staff','invigilator','rejected'].map(r=>'<option value="'+r+'"'+(r===role?' selected':'')+'>'+r+'</option>').join('')+(['pending','teacher','staff','invigilator','rejected'].includes(role)?'':'<option value="'+esc(role)+'" selected>'+esc(role)+'</option>')+'</select>';
+        const boxes=codes.map(c=>'<label style="display:inline-block;margin:2px 8px 2px 0;font-size:12px"><input type="checkbox" class="st-sub" value="'+esc(c)+'"'+(pre.includes(c.toUpperCase())?' checked':'')+'> '+esc(c)+'</label>').join('');
+        return '<tr data-uid="'+esc(u.uid)+'"><td><b>'+esc(u.name||'(no name)')+'</b><br><small>'+esc(u.email||u.uid)+'</small></td><td>'+esc(u.requestedSubject||'—')+'</td><td>'+roleSel+'</td><td style="min-width:220px">'+boxes+'</td><td><button class="btn success" onclick="saveStaff(this)">Save</button></td></tr>';
+      }).join('')||'<tr><td colspan="5">No users.</td></tr>';
+      msg.textContent=list.filter(u=>String(u.role).toLowerCase()==='pending').length+' pending';
+    }catch(e){msg.textContent='Could not load: '+e.message;}
+  };
+  window.saveStaff=async function(btn){
+    if(!requireAdmin())return;
+    const tr=btn.closest('tr'), uid=tr.dataset.uid;
+    const role=tr.querySelector('.st-role').value;
+    const subs=[...tr.querySelectorAll('.st-sub:checked')].map(x=>x.value);
+    if((role==='teacher'||role==='staff')&&!subs.length){alert('Tick at least one subject. (No subject would mean ALL subjects.)');return;}
+    try{
+      await db.collection('users').doc(uid).set({role,assignedSubjects:(role==='teacher'||role==='staff')?subs:[],approvedBy:(currentUser&&(currentUser.email||currentUser.uid))||'',approvedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+      btn.textContent='Saved ✔'; setTimeout(()=>{btn.textContent='Save'},1500);
+    }catch(e){alert('Save failed: '+e.message);}
+  };
 })();
 </script>
 </body>
