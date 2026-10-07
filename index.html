@@ -291,6 +291,14 @@ body.marks-only .content{padding:14px}
   <select id="regSubMP" title="Class X subject"><option value="">Class X subject (if any)</option></select>
   <button onclick="registerTeacher()" style="background:#16a34a;color:#fff">Submit for Approval</button>
   <span id="regMsg" style="font-size:13px"></span>
+  <div id="regGuide" style="flex-basis:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;color:#e2e8f0">
+    <b>রেজিস্ট্রেশনের সহজ নিয়ম</b><br>
+    ১. পুরো নাম, ইমেইল ও পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর) দিন, পাসওয়ার্ড আবার লিখুন।<br>
+    ২. Class XI ও/অথবা Class X-এর তালিকা থেকে আপনার বিষয় বেছে নিন (দুই ক্লাসেই পড়ালে দুটোতেই)।<br>
+    ৩. "Submit for Approval" চাপুন। "Waiting for Headmaster approval" লেখা এলে আবেদন গেছে।<br>
+    ৪. প্রধান শিক্ষক অনুমোদন দিলে একই লিঙ্ক আবার খুলে Sign In করুন (একই ইমেইল-পাসওয়ার্ড)।<br>
+    ৫. Attendance Lock হওয়ার পর নম্বর এন্ট্রি করুন → Save Draft → শেষে Finalize &amp; Lock।
+  </div>
 </div>
 
 <div class="content">
@@ -316,6 +324,27 @@ body.marks-only .content{padding:14px}
     <div class="card">
       <div class="label">Marks Records</div>
       <div class="value orange" id="dashMarks">0</div>
+    </div>
+  </div>
+
+  <div class="panel" id="shareRegPanel" style="display:none">
+    <h3>📤 Share Registration Link with Teachers</h3>
+    <div class="subtitle" style="margin-bottom:8px">Send this link to teachers. They register once, you approve them in Staff Approvals, then they enter marks.</div>
+    <div class="toolbar">
+      <div class="field"><label>For</label>
+        <select id="shReg"><option value="">Class XI &amp; Class X (both)</option><option value="xi">Class XI only</option><option value="mp">Class X only</option></select>
+      </div>
+      <div class="field" style="flex:1;min-width:240px"><label>Link</label><input id="shLink" readonly></div>
+      <button class="btn light" id="shCopy">Copy Link</button>
+      <button class="btn success" id="shWa">Share on WhatsApp</button>
+    </div>
+    <div style="margin-top:10px;font-size:13px;line-height:1.7">
+      <b>শিক্ষকদের জন্য সহজ নিয়ম</b><br>
+      ১. লিঙ্ক খুলে "Register (New Teacher)" চাপুন।<br>
+      ২. নাম, ইমেইল, পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর) দিন।<br>
+      ৩. Class XI / Class X-এর নিজের বিষয় বেছে "Submit for Approval" চাপুন।<br>
+      ৪. প্রধান শিক্ষক অনুমোদন দিলে আবার লিঙ্ক খুলে Sign In করুন।<br>
+      ৫. Attendance Lock হলে নম্বর এন্ট্রি করুন → Save Draft → Finalize &amp; Lock।
     </div>
   </div>
 
@@ -3162,6 +3191,7 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
     if(m&&roleIs('pending')) m.textContent='Registered — waiting for Headmaster approval. You cannot enter marks yet.';
     if(m&&roleIs('rejected')) m.textContent='Registration not approved. Contact the Headmaster.';
     const ns=$('navStaff'); if(ns) ns.style.display=isAdmin()?'block':'none';
+    const sr=$('shareRegPanel'); if(sr) sr.style.display=isAdmin()?'block':'none';
     const rb=$('regBtn'); if(rb) rb.style.display=(currentUser&&!currentUser.isAnonymous&&currentRole!=='viewer')?'none':'inline-block';
   };
   applyRoleUI();
@@ -3222,6 +3252,18 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
       btn.textContent='Saved ✔'; setTimeout(()=>{btn.textContent='Save'},1500);
     }catch(e){alert('Save failed: '+e.message);}
   };
+
+  /* dashboard: share registration link */
+  (function(){
+    const sel=$('shReg'), inp=$('shLink'); if(!sel||!inp) return;
+    const mk=()=>{const b=location.origin+location.pathname; return sel.value?b+'?m='+sel.value:b;};
+    const head=()=>sel.value==='xi'?'Class XI':(sel.value==='mp'?'Class X (মাধ্যমিক)':'Class XI ও Class X');
+    const msg=()=>'নমস্কার স্যার/ম্যাডাম,\n\nTFHS-এ '+head()+'-এর নম্বর অনলাইনে এন্ট্রি করার জন্য নিচের লিঙ্কে নিজের অ্যাকাউন্ট খুলুন।\n\nলিঙ্ক: '+mk()+'\n\nসহজ নিয়ম:\n১. লিঙ্ক খুলে "Register (New Teacher)" চাপুন।\n২. নাম, ইমেইল, পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর) দিন।\n৩. Class XI / Class X-এর নিজের বিষয় বেছে "Submit for Approval" চাপুন।\n৪. প্রধান শিক্ষক অনুমোদন দিলে আবার লিঙ্ক খুলে Sign In করুন।\n৫. Attendance Lock হলে নম্বর এন্ট্রি করুন → Save Draft → Finalize & Lock।\n\nধন্যবাদ।';
+    const upd=()=>{inp.value=mk();};
+    sel.onchange=upd; upd();
+    $('shCopy').onclick=async()=>{ try{await navigator.clipboard.writeText(mk());$('shCopy').textContent='Copied ✔';setTimeout(()=>$('shCopy').textContent='Copy Link',1500);}catch(e){prompt('Copy link:',mk());} };
+    $('shWa').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(msg()),'_blank');
+  })();
 })();
 </script>
 </body>
