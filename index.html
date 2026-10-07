@@ -1021,6 +1021,27 @@ function requireAssignedClass(cls,value,label){
   return true;
 }
 
+/* Teachers see and can use ONLY their assigned subjects (admin sees all). */
+function restrictSubjectSelects(fire){
+  const rules=[['attSubject','xi'],['marksSubject','xi'],['combSubject','xi'],['mp_attSubject','mp'],['mp_marksSubject','mp'],['mp_resultSubject','mp']];
+  rules.forEach(([id,cls])=>{
+    const el=document.getElementById(id); if(!el) return;
+    [...el.options].forEach(o=>{
+      if(!o.value) return;
+      const ok=isAdmin()||assignedToClass(cls,o.value);
+      o.hidden=!ok; o.disabled=!ok;
+    });
+    const cur=el.selectedOptions[0];
+    if(cur&&cur.value&&cur.disabled){
+      const first=[...el.options].find(o=>o.value&&!o.disabled);
+      const prev=el.value; el.value=first?first.value:'';
+      if(fire&&el.value!==prev) el.dispatchEvent(new Event('change'));
+    }
+  });
+}
+const __applyRoleUI0=applyRoleUI;
+applyRoleUI=function(){ __applyRoleUI0.apply(this,arguments); try{restrictSubjectSelects(true);}catch(e){} };
+
 async function loadUserRole(user){
   currentUser=user;
   currentUserProfile={};
@@ -1132,6 +1153,7 @@ function populateSubjects(){
 
   updateScheme();
   setExamDateFromSubject();
+  restrictSubjectSelects(false);
 }
 
 function setExamDateFromSubject(){
@@ -1580,6 +1602,7 @@ function attendancePayload(subject,date){
    so a sheet locked by anyone else a moment ago can never be overwritten. */
 async function saveAttendance(){
   if(!requireAttendance()||attLockedFor()) return;
+  { const _s=document.getElementById("attSubject").value; if(_s&&!requireAssignedClass("xi",_s,"subject")) return; }
   const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value;
   if(!attendanceRows.length){ alert("Generate the attendance sheet first."); return; }
   const id=`${subject}_${date}`.replace(/[\/\s]/g,"_"), ref=db.collection("xiAttendance").doc(id);
@@ -1598,6 +1621,7 @@ async function saveAttendance(){
 }
 async function lockAttendance(){
   if(!requireAttendance()||attendanceLocked) return;
+  { const _s=document.getElementById("attSubject").value; if(_s&&!requireAssignedClass("xi",_s,"subject")) return; }
   if(!attendanceRows.length){alert("Generate the attendance sheet first.");return;}
   if(!confirm("Submit and LOCK this attendance for the day? After this only Admin can unlock or change it."))return;
   const subject=document.getElementById("attSubject").value,date=document.getElementById("attDate").value;
@@ -2632,6 +2656,7 @@ function populateSubjects(){
     const el=document.getElementById(id); el.innerHTML='<option value="">Select Subject</option>';
     SUBJECTS.forEach(s=>el.innerHTML+=`<option value="${s}">${PROGRAMME[s].name}</option>`);
   });
+  restrictSubjectSelects(false);
 }
 populateSubjects();
 
@@ -2731,6 +2756,7 @@ function updateAttendanceLockUI(){
 }
 async function saveAttendance(){
   if(!requireAttendance()||attendanceLocked)return;
+  { const _s=document.getElementById("mp_attSubject").value; if(_s&&!requireAssignedClass("mp",_s,"subject")) return; }
   const subject=document.getElementById("mp_attSubject").value;if(!subject||!attendanceRows.length)return alert("Select subject and load students.");
   const id=subject+"_"+PROGRAMME[subject].date.replace(/-/g,""),ref=db.collection("mpAttendance").doc(id);
   try{
@@ -2741,6 +2767,7 @@ async function saveAttendance(){
 }
 async function lockAttendance(){
   if(!requireAttendance()||attendanceLocked)return;
+  { const _s=document.getElementById("mp_attSubject").value; if(_s&&!requireAssignedClass("mp",_s,"subject")) return; }
   const subject=document.getElementById("mp_attSubject").value;if(!subject||!attendanceRows.length)return alert("Load attendance first.");
   if(!confirm("Submit and lock attendance?"))return;
   const id=subject+"_"+PROGRAMME[subject].date.replace(/-/g,""),ref=db.collection("mpAttendance").doc(id);
