@@ -2994,7 +2994,7 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
     const host=document.getElementById(hostId); if(!host) return;
     const box=document.createElement('div'); box.className='panel ml-panel';
     box.innerHTML='<h3 style="margin:0 0 6px">🔗 Marks Entry Links — send to subject teachers</h3>'+
-      '<div class="subtitle" style="margin-bottom:8px">Each link opens ONLY the marks entry screen of that subject (no other menu). Teacher signs in with own staff login.</div>'+
+      '<div class="subtitle" style="margin-bottom:8px">Each link opens ONLY the marks entry screen of that subject. The WhatsApp button sends the link with a Bengali guide for the teacher.</div>'+
       '<div class="toolbar">'+(c==='xi'?'<div class="field"><label>Examination</label><select class="ml-exam"><option value="SEM1">Semester I</option><option value="SUPP">Semester I Supplementary</option><option value="SEM2">Semester II</option></select></div>':'')+
       '<button class="btn ml-gen">Generate Links</button></div><div class="tablewrap ml-out" style="margin-top:8px"></div>';
     host.appendChild(box);
@@ -3006,7 +3006,10 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
       const rows=opts.map(o=>{
         const u=link(c,o.value,ex);
         const label=c==='xi'?o.value:(o.value+' — '+o.textContent);
-        const msg='Marks entry link — '+(c==='xi'?'Class XI '+EXAM_LABEL[ex]:'Class X MP (SE) 2027')+' — '+o.value+'\n'+u+'\nOpen, sign in with your staff email & password, enter marks, Save Draft, then Finalize & Lock.';
+        const head=(c==='xi'?'Class XI — '+EXAM_LABEL[ex]:'Class X মাধ্যমিক MP (SE) 2027');
+        const msg='নমস্কার স্যার/ম্যাডাম,\n\nTFHS-এ '+head+' — বিষয়: '+o.value+'-এর নম্বর অনলাইনে এন্ট্রি করতে নিচের লিঙ্কটি ব্যবহার করুন।\n\nলিঙ্ক: '+u+'\n\n'+
+'প্রথমবার যা করবেন:\n১. লিঙ্কটি মোবাইল বা কম্পিউটারে খুলুন।\n২. উপরে "Register (New Teacher)" বোতামে চাপ দিন।\n৩. পুরো নাম, ইমেইল ও পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর) দিন, পাসওয়ার্ড আবার লিখুন।\n৪. তালিকা (dropdown) থেকে আপনার বিষয় বেছে নিন।\n৫. "Submit for Approval" চাপুন।\n৬. "Waiting for Headmaster approval" লেখা এলে বুঝবেন আবেদন গেছে। অনুমোদনের আগে নম্বর এন্ট্রি করা যাবে না।\n\n'+
+'অনুমোদনের পরে:\n৭. প্রধান শিক্ষক অনুমোদন দিলে একই লিঙ্ক আবার খুলুন এবং একই ইমেইল-পাসওয়ার্ড দিয়ে Sign In করুন।\n৮. আপনার বিষয়ের Attendance Submit ও Lock হওয়ার পরই নম্বর এন্ট্রি খুলবে।\n৯. নম্বর দিয়ে প্রথমে Save Draft করুন; সব মিলিয়ে দেখে শেষে Finalize & Lock করুন। Lock করার পর শুধু প্রধান শিক্ষক পরিবর্তন করতে পারবেন।\n\nকোনো সমস্যা হলে প্রধান শিক্ষকের সঙ্গে যোগাযোগ করুন। ধন্যবাদ।';
         return '<tr><td><b>'+esc(label)+'</b></td><td><input class="ml-url" readonly value="'+esc(u)+'"></td>'+
           '<td style="white-space:nowrap"><button class="btn light ml-copy" data-u="'+esc(u)+'">Copy</button> '+
           '<a class="btn light" style="text-decoration:none;display:inline-block" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent(msg)+'">WhatsApp</a></td></tr>';
@@ -3091,7 +3094,11 @@ window.MP={loadDashAtt,loadAttSummary,showView,importExcel,addStudent,saveStuden
     const sel=$('regSub'); if(!sel||sel.dataset.filled) return;
     const xi={}, x10={}, names={};
     try{ Object.keys(SCHEMES||{}).forEach(k=>xi[k]=1); }catch(e){}
-    try{ Object.keys(PROGRAMME||{}).forEach(k=>{x10[k]=1; names[k]=PROGRAMME[k].name;}); }catch(e){}
+    const MPNAMES={BNGA:'BENGALI',SANT:'SANTHALI',ENGB:'ENGLISH',HIST:'HISTORY',GEGR:'GEOGRAPHY',MATH:'MATHEMATICS',PHYS:'PHYSICAL SCIENCE',BIOS:'LIFE SCIENCE'};
+    const fromSel=(id,tgt,keepName)=>{ const e=document.getElementById(id); if(!e) return; [...e.options].forEach(o=>{ if(o.value){ tgt[o.value.toUpperCase()]=1; if(keepName&&o.textContent&&o.textContent.trim().toUpperCase()!==o.value.toUpperCase()) names[o.value.toUpperCase()]=o.textContent.replace(/^.*?[—-]\s*/,'').trim(); } }); };
+    fromSel('marksSubject',xi,false);
+    fromSel('mp_marksSubject',x10,true);
+    Object.keys(MPNAMES).forEach(k=>{ x10[k]=1; if(!names[k]) names[k]=MPNAMES[k]; });
     if(m0==='xi') Object.keys(x10).forEach(k=>delete x10[k]);
     if(m0==='mp') Object.keys(xi).forEach(k=>delete xi[k]);
     const pre=sub0.split(',')[0].trim().toUpperCase();
